@@ -30,9 +30,11 @@
         }
 
         h1 { font-size: 28px; margin-bottom: 10px; }
+        h2 { margin-bottom: 20px; color: #333; }
+        h3 { font-size: 18px; margin-bottom: 10px; }
 
         .nav-tabs { display: flex; background: #f8f9fa; border-bottom: 2px solid #dee2e6; overflow-x: auto; }
-        .nav-tab { padding: 15px 25px; cursor: pointer; border: none; background: transparent; font-weight: 600; color: #666; transition: all 0.3s; white-space: nowrap; }
+        .nav-tab { padding: 15px 20px; cursor: pointer; border: none; background: transparent; font-weight: 600; color: #666; transition: all 0.3s; white-space: nowrap; font-size: 13px; }
         .nav-tab:hover { background: #e9ecef; }
         .nav-tab.active { background: white; color: #667eea; border-bottom: 3px solid #667eea; }
         .content { padding: 30px; }
@@ -60,8 +62,11 @@
         td { padding: 10px 8px; border-bottom: 1px solid #dee2e6; }
         tr.low-stock { background: #fff3cd; }
         tr.low-stock td { color: #856404; font-weight: 600; }
+        tr.green { background: #d4edda; }
+        tr.yellow { background: #fff3cd; }
+        tr.red { background: #f8d7da; }
 
-        input[type="number"], input[type="text"], input[type="email"], textarea {
+        input[type="number"], input[type="text"], input[type="email"], input[type="date"], textarea, select {
             width: 100%; padding: 8px; border: 2px solid #dee2e6; border-radius: 4px; font-size: 14px;
         }
 
@@ -76,11 +81,28 @@
         .alert-danger { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
         .item-code { color: #667eea; font-family: monospace; font-size: 11px; }
 
+        .gap-display { font-size: 48px; color: #dc3545; font-weight: bold; text-align: center; padding: 30px; background: #f8d7da; border-radius: 8px; margin: 20px 0; }
+        .checklist { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .checklist-item { padding: 10px; margin: 5px 0; background: white; border-radius: 4px; display: flex; align-items: center; }
+        .checklist-item input[type="checkbox"] { margin-right: 10px; width: 20px; height: 20px; }
+
+        .recommendation-box { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 25px; border-radius: 8px; margin: 20px 0; }
+        .recommendation-box h3 { color: white; margin-bottom: 15px; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+
+        .profit-item { padding: 15px; border-radius: 8px; margin: 10px 0; }
+        .profit-green { background: #d4edda; border-left: 4px solid #28a745; }
+        .profit-yellow { background: #fff3cd; border-left: 4px solid #ffc107; }
+        .profit-red { background: #f8d7da; border-left: 4px solid #dc3545; }
+
         @media (max-width: 768px) {
             .content { padding: 15px; }
             table { font-size: 11px; }
             th, td { padding: 6px 4px; }
-            .nav-tab { padding: 12px 15px; font-size: 13px; }
+            .nav-tab { padding: 12px 12px; font-size: 12px; }
+            .gap-display { font-size: 32px; padding: 20px; }
         }
     </style>
 </head>
@@ -95,6 +117,8 @@
             <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
             <button class="nav-tab" onclick="switchView('dailyCount')">Daily Count</button>
             <button class="nav-tab" onclick="switchView('orderSheet')">Order Sheet</button>
+            <button class="nav-tab" onclick="switchView('cogsGap')">COGS Gap</button>
+            <button class="nav-tab" onclick="switchView('menuProfit')">Menu Profit</button>
             <button class="nav-tab" onclick="switchView('settings')">Settings</button>
         </div>
 
@@ -121,6 +145,8 @@
                 <div class="controls">
                     <button class="large" onclick="switchView('dailyCount'); startDailyCount();">📋 Start Daily Count</button>
                     <button class="secondary" onclick="switchView('orderSheet')">📧 Order Sheet</button>
+                    <button class="secondary" onclick="switchView('cogsGap')">📊 COGS Gap Tracker</button>
+                    <button class="secondary" onclick="switchView('menuProfit')">💰 Menu Profitability</button>
                 </div>
 
                 <div id="inventoryContainer"></div>
@@ -137,7 +163,7 @@
 
             <!-- Order Sheet -->
             <div id="orderSheet" class="view">
-                <h2 style="margin-bottom: 20px;">📋 Weekly Order Sheet</h2>
+                <h2>📋 Weekly Order Sheet</h2>
                 <div class="controls">
                     <button onclick="generateOrderSheet()">Generate Order Sheet</button>
                     <button class="success" onclick="emailOrderSheet()">📧 Email Order Sheet</button>
@@ -145,24 +171,140 @@
                 <div id="orderSheetContent"></div>
             </div>
 
+            <!-- COGS Gap Tracker -->
+            <div id="cogsGap" class="view">
+                <h2>📊 COGS Gap Tracker</h2>
+
+                <div class="summary-cards">
+                    <div class="card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <h3>This Week's Gap</h3>
+                        <div class="value">$<span id="currentGap">0</span></div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                        <h3>Actual COGS %</h3>
+                        <div class="value"><span id="currentActual">0</span>%</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);">
+                        <h3>Total Gap (Month)</h3>
+                        <div class="value">$<span id="monthGap">0</span></div>
+                    </div>
+                </div>
+
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3>Add Weekly COGS Data</h3>
+                    <div class="form-group">
+                        <label>Week Ending Date:</label>
+                        <input type="date" id="weekDate">
+                    </div>
+                    <div class="form-group">
+                        <label>Net Sales ($):</label>
+                        <input type="number" id="netSales" placeholder="35000">
+                    </div>
+                    <div class="form-group">
+                        <label>Theoretical COGS % (from Power BI):</label>
+                        <input type="number" step="0.01" id="theoreticalCOGS" placeholder="32.16">
+                    </div>
+                    <div class="form-group">
+                        <label>Actual COGS %:</label>
+                        <input type="number" step="0.01" id="actualCOGS" placeholder="45.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Category with Biggest Issues:</label>
+                        <select id="categoryIssue">
+                            <option value="">Select category...</option>
+                            <option value="Beverages">Beverages</option>
+                            <option value="Food">Food</option>
+                            <option value="Supplies">Supplies</option>
+                            <option value="Waste">Waste/Comps</option>
+                            <option value="Theft">Theft/Shrinkage</option>
+                        </select>
+                    </div>
+                    <button onclick="addCOGSEntry()">Add COGS Entry</button>
+                </div>
+
+                <div id="cogsGapDisplay"></div>
+
+                <div class="checklist">
+                    <h3>📋 Daily Manager Checklist</h3>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check1">
+                        <label for="check1">All employee drinks rung in correctly?</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check2">
+                        <label for="check2">Food pulled correctly with no waste?</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check3">
+                        <label for="check3">Waste log completed and reviewed?</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check4">
+                        <label for="check4">Compared theoretical vs actual in Power BI?</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check5">
+                        <label for="check5">Checked for comps or voids today?</label>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="success" onclick="emailCOGSSummary()">📧 Email Weekly COGS Summary</button>
+                </div>
+
+                <div id="cogsHistory"></div>
+            </div>
+
+            <!-- Menu Profitability Tracker -->
+            <div id="menuProfit" class="view">
+                <h2>💰 Menu Profitability Tracker</h2>
+
+                <div class="recommendation-box">
+                    <h3>🎯 What To Push Today</h3>
+                    <div id="pushRecommendation"></div>
+                </div>
+
+                <div class="summary-cards">
+                    <div class="card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                        <h3>Best Margin Item</h3>
+                        <div id="bestItem" style="font-size: 14px; margin-top: 10px;"></div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);">
+                        <h3>Worst Margin Item</h3>
+                        <div id="worstItem" style="font-size: 14px; margin-top: 10px;"></div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <h3>Avg COGS %</h3>
+                        <div class="value"><span id="avgCOGS">0</span>%</div>
+                    </div>
+                </div>
+
+                <div style="margin: 20px 0; padding: 15px; background: #d1ecf1; border-left: 4px solid #0c5460; border-radius: 4px;">
+                    <strong>💡 Weekly Tip:</strong> <span id="weeklyTip"></span>
+                </div>
+
+                <h3 style="margin: 30px 0 15px;">Menu Items by Profitability</h3>
+                <div id="menuItemsDisplay"></div>
+            </div>
+
             <!-- Settings -->
             <div id="settings" class="view">
-                <h2 style="margin-bottom: 20px;">⚙️ Settings</h2>
+                <h2>⚙️ Settings</h2>
 
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Store Email:</label>
+                <div class="form-group">
+                    <label>Store Email:</label>
                     <input type="email" id="storeEmail" value="store2106@gmail.com">
                 </div>
 
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Manager Emails (comma-separated):</label>
-                    <textarea id="managerEmails" rows="3" style="width: 100%; padding: 8px; border: 2px solid #dee2e6; border-radius: 4px;">newgardcg@gmail.com</textarea>
+                <div class="form-group">
+                    <label>Manager Emails (comma-separated):</label>
+                    <textarea id="managerEmails" rows="3">newgardcg@gmail.com</textarea>
                 </div>
 
                 <button onclick="saveSettings()">💾 Save Settings</button>
 
                 <div class="alert-box alert-success" style="margin-top: 30px;">
-                    <h3 style="margin-bottom: 10px;">📱 Share This App</h3>
+                    <h3>📱 Share This App</h3>
                     <p style="margin-bottom: 10px;">URL: <strong>https://newgardcg.github.io/scooters-inventory/</strong></p>
                     <p style="margin-top: 15px; font-size: 14px;">
                         Text this URL to your managers. All prices are from Harvest Roasting invoices!
@@ -281,6 +423,36 @@
             ]
         };
 
+        // REAL MENU ITEMS FROM BRINK POWER BI - January 2026
+        let menuItems = [
+            { name: "MED Iced Flavored Latte", sales: 448, cogs: 21.61, price: 5.50 },
+            { name: "Extra Shot", sales: 516, cogs: 21.45, price: 0.75 },
+            { name: "MED Flavored Latte", sales: 737, cogs: 23.05, price: 5.50 },
+            { name: "LRG Iced Flavored Latte", sales: 316, cogs: 23.25, price: 6.50 },
+            { name: "LRG Flavored Latte", sales: 574, cogs: 23.60, price: 6.50 },
+            { name: "MED Banana Bread Latte", sales: 341, cogs: 24.88, price: 5.75 },
+            { name: "LRG White Mocha", sales: 295, cogs: 25.97, price: 6.75 },
+            { name: "SML Oreo Blender", sales: 295, cogs: 26.14, price: 5.00 },
+            { name: "MED Iced Cinnalicious", sales: 334, cogs: 26.20, price: 5.50 },
+            { name: "MED Iced Caramelicious", sales: 386, cogs: 26.38, price: 5.50 },
+            { name: "MED Blended Caramelicious", sales: 353, cogs: 27.34, price: 5.75 },
+            { name: "MED Cinnalicious", sales: 322, cogs: 27.60, price: 5.50 },
+            { name: "Caramelicious", sales: 532, cogs: 27.86, price: 5.50 },
+            { name: "LRG Caramelicious", sales: 399, cogs: 28.32, price: 6.50 },
+            { name: "MED Oreo Blender", sales: 323, cogs: 32.02, price: 5.75 },
+            { name: "Cinnamon Roll", sales: 378, cogs: 42.74, price: 3.50 },
+            { name: "Maple Waffle Sandwich", sales: 1053, cogs: 43.88, price: 5.99 },
+            { name: "Everything Bagel Sandwich", sales: 636, cogs: 43.88, price: 5.99 },
+            { name: "Bacon Breakfast Sandwich", sales: 588, cogs: 45.15, price: 5.49 },
+            { name: "Mini Chocolate Chip Cookies", sales: 327, cogs: 47.75, price: 2.99 },
+            { name: "Sausage Burrito", sales: 787, cogs: 48.82, price: 4.99 },
+            { name: "Bacon Burrito", sales: 489, cogs: 48.82, price: 4.99 },
+            { name: "French Toastie", sales: 512, cogs: 52.03, price: 5.99 },
+            { name: "Bacon Gouda Egg Bites", sales: 446, cogs: 67.81, price: 4.99 },
+            { name: "Tomato Feta Egg Bites", sales: 348, cogs: 67.81, price: 4.99 }
+        ];
+
+        let cogsData = [];
         let settings = {
             storeEmail: 'store2106@gmail.com',
             managerEmails: 'newgardcg@gmail.com'
@@ -294,7 +466,6 @@
             const saved = localStorage.getItem('scootersInventory');
             if (saved) {
                 const savedData = JSON.parse(saved);
-                // Preserve quantities but update prices/codes
                 for (const [category, items] of Object.entries(inventory)) {
                     if (savedData[category]) {
                         items.forEach((item, index) => {
@@ -311,7 +482,13 @@
                 document.getElementById('storeEmail').value = settings.storeEmail || '';
                 document.getElementById('managerEmails').value = settings.managerEmails || '';
             }
+            const savedCOGS = localStorage.getItem('scootersCOGS');
+            if (savedCOGS) {
+                cogsData = JSON.parse(savedCOGS);
+            }
             updateDisplay();
+            updateCOGSDisplay();
+            updateMenuDisplay();
             checkFriday();
         }
 
@@ -333,6 +510,8 @@
             document.getElementById(viewName).classList.add('active');
             event.target.classList.add('active');
             if (viewName === 'orderSheet') generateOrderSheet();
+            if (viewName === 'cogsGap') updateCOGSDisplay();
+            if (viewName === 'menuProfit') updateMenuDisplay();
         }
 
         function updateDisplay() {
@@ -522,6 +701,216 @@
             const recipients = [settings.storeEmail, settings.managerEmails].filter(e => e).join(',');
             const mailtoLink = `mailto:${recipients}?subject=${encodeURIComponent('Harvest Roasting Order - ' + new Date().toLocaleDateString())}&body=${encodeURIComponent(emailBody)}`;
             window.location.href = mailtoLink;
+        }
+
+        // COGS Gap Tracker
+        function addCOGSEntry() {
+            const weekDate = document.getElementById('weekDate').value;
+            const netSales = parseFloat(document.getElementById('netSales').value);
+            const theoreticalCOGS = parseFloat(document.getElementById('theoreticalCOGS').value);
+            const actualCOGS = parseFloat(document.getElementById('actualCOGS').value);
+            const categoryIssue = document.getElementById('categoryIssue').value;
+
+            if (!weekDate || !netSales || !theoreticalCOGS || !actualCOGS) {
+                alert('Please fill in all fields!');
+                return;
+            }
+
+            const theoreticalDollar = (theoreticalCOGS / 100) * netSales;
+            const actualDollar = (actualCOGS / 100) * netSales;
+            const gap = actualDollar - theoreticalDollar;
+
+            cogsData.push({
+                weekDate, netSales, theoreticalCOGS, actualCOGS, theoreticalDollar, actualDollar, gap, categoryIssue, timestamp: Date.now()
+            });
+
+            localStorage.setItem('scootersCOGS', JSON.stringify(cogsData));
+            updateCOGSDisplay();
+
+            // Clear form
+            document.getElementById('weekDate').value = '';
+            document.getElementById('netSales').value = '';
+            document.getElementById('theoreticalCOGS').value = '';
+            document.getElementById('actualCOGS').value = '';
+            document.getElementById('categoryIssue').value = '';
+
+            alert('COGS data added successfully!');
+        }
+
+        function updateCOGSDisplay() {
+            // Update summary cards
+            if (cogsData.length > 0) {
+                const latest = cogsData[cogsData.length - 1];
+                document.getElementById('currentGap').textContent = Math.abs(latest.gap).toFixed(2);
+                document.getElementById('currentActual').textContent = latest.actualCOGS.toFixed(2);
+
+                // Calculate month total
+                const monthGap = cogsData.reduce((sum, entry) => sum + entry.gap, 0);
+                document.getElementById('monthGap').textContent = Math.abs(monthGap).toFixed(2);
+            }
+
+            // Display COGS history
+            const historyDiv = document.getElementById('cogsHistory');
+            if (cogsData.length === 0) {
+                historyDiv.innerHTML = '<div class="alert-box alert-warning">No COGS data yet. Add your first entry above!</div>';
+                return;
+            }
+
+            let html = '<h3 style="margin: 30px 0 15px;">COGS History</h3><table><thead><tr><th>Week Ending</th><th>Net Sales</th><th>Theoretical %</th><th>Actual %</th><th>Gap ($)</th><th>Problem Area</th><th>Trend</th></tr></thead><tbody>';
+
+            cogsData.slice().reverse().forEach((entry, index) => {
+                const prevIndex = cogsData.length - index - 2;
+                let trend = '—';
+                if (prevIndex >= 0) {
+                    const prevGap = cogsData[prevIndex].gap;
+                    if (entry.gap < prevGap) trend = '✓ Improving';
+                    else if (entry.gap > prevGap) trend = '⚠ Worsening';
+                    else trend = '— Same';
+                }
+
+                const rowClass = entry.gap > 1000 ? 'red' : entry.gap > 500 ? 'yellow' : 'green';
+                html += `<tr class="${rowClass}">
+                    <td>${new Date(entry.weekDate).toLocaleDateString()}</td>
+                    <td>$${entry.netSales.toFixed(2)}</td>
+                    <td>${entry.theoreticalCOGS.toFixed(2)}%</td>
+                    <td><strong>${entry.actualCOGS.toFixed(2)}%</strong></td>
+                    <td><strong>$${Math.abs(entry.gap).toFixed(2)}</strong></td>
+                    <td>${entry.categoryIssue || 'N/A'}</td>
+                    <td>${trend}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            historyDiv.innerHTML = html;
+        }
+
+        function emailCOGSSummary() {
+            if (cogsData.length === 0) {
+                alert('No COGS data to email!');
+                return;
+            }
+
+            const latest = cogsData[cogsData.length - 1];
+            const monthGap = cogsData.reduce((sum, entry) => sum + entry.gap, 0);
+
+            let emailBody = `SCOOTERS COFFEE #2106 - WEEKLY COGS SUMMARY\nDate: ${new Date().toLocaleDateString()}\nAllen, Texas\n\n`;
+            emailBody += `THIS WEEK'S PERFORMANCE:\n${'='.repeat(50)}\n`;
+            emailBody += `Week Ending: ${new Date(latest.weekDate).toLocaleDateString()}\n`;
+            emailBody += `Net Sales: $${latest.netSales.toFixed(2)}\n`;
+            emailBody += `Theoretical COGS: ${latest.theoreticalCOGS.toFixed(2)}% ($${latest.theoreticalDollar.toFixed(2)})\n`;
+            emailBody += `Actual COGS: ${latest.actualCOGS.toFixed(2)}% ($${latest.actualDollar.toFixed(2)})\n`;
+            emailBody += `GAP: $${Math.abs(latest.gap).toFixed(2)} ${latest.gap > 0 ? 'OVER' : 'UNDER'} theoretical\n`;
+            emailBody += `Problem Category: ${latest.categoryIssue || 'N/A'}\n\n`;
+
+            emailBody += `MONTH-TO-DATE:\n${'='.repeat(50)}\n`;
+            emailBody += `Total COGS Gap: $${Math.abs(monthGap).toFixed(2)}\n`;
+            emailBody += `Weeks Tracked: ${cogsData.length}\n`;
+            emailBody += `Average Gap per Week: $${Math.abs(monthGap / cogsData.length).toFixed(2)}\n\n`;
+
+            // Check if improving
+            if (cogsData.length > 1) {
+                const prev = cogsData[cogsData.length - 2];
+                const trend = latest.gap < prev.gap ? 'IMPROVING ✓' : 'NEEDS ATTENTION ⚠';
+                emailBody += `Trend: ${trend}\n`;
+                emailBody += `Change from last week: $${Math.abs(latest.gap - prev.gap).toFixed(2)}\n\n`;
+            }
+
+            emailBody += `ACTION ITEMS:\n${'='.repeat(50)}\n`;
+            emailBody += `☐ All employee drinks rung in?\n`;
+            emailBody += `☐ Food waste minimized?\n`;
+            emailBody += `☐ Waste log accurate?\n`;
+            emailBody += `☐ Compare Power BI theoretical vs actual\n`;
+            emailBody += `☐ Review ${latest.categoryIssue || 'problem categories'}\n\n`;
+
+            emailBody += `TARGET: 32% COGS | CURRENT: ${latest.actualCOGS.toFixed(2)}%`;
+
+            const recipients = [settings.storeEmail, settings.managerEmails].filter(e => e).join(',');
+            const mailtoLink = `mailto:${recipients}?subject=${encodeURIComponent('COGS Gap Summary - Week Ending ' + new Date(latest.weekDate).toLocaleDateString())}&body=${encodeURIComponent(emailBody)}`;
+            window.location.href = mailtoLink;
+        }
+
+        // Menu Profitability Tracker
+        function updateMenuDisplay() {
+            // Calculate profitability metrics
+            const greenItems = menuItems.filter(item => item.cogs < 30);
+            const yellowItems = menuItems.filter(item => item.cogs >= 30 && item.cogs <= 45);
+            const redItems = menuItems.filter(item => item.cogs > 45);
+
+            const avgCOGS = menuItems.reduce((sum, item) => sum + item.cogs, 0) / menuItems.length;
+            document.getElementById('avgCOGS').textContent = avgCOGS.toFixed(2);
+
+            // Best and worst items
+            const sortedByCOGS = [...menuItems].sort((a, b) => a.cogs - b.cogs);
+            const best = sortedByCOGS[0];
+            const worst = sortedByCOGS[sortedByCOGS.length - 1];
+
+            document.getElementById('bestItem').innerHTML = `<strong>${best.name}</strong><br>${best.cogs.toFixed(2)}% COGS | $${best.sales} sales`;
+            document.getElementById('worstItem').innerHTML = `<strong>${worst.name}</strong><br>${worst.cogs.toFixed(2)}% COGS | $${worst.sales} sales`;
+
+            // Push recommendation - top 3 best margin items
+            const topMargin = sortedByCOGS.slice(0, 3);
+            let pushHTML = '<div style="font-size: 18px; font-weight: 600; margin-bottom: 15px;">Push These High-Margin Items Today:</div>';
+            topMargin.forEach((item, index) => {
+                const profit = item.price - (item.price * item.cogs / 100);
+                pushHTML += `<div style="padding: 10px; background: rgba(255,255,255,0.2); border-radius: 4px; margin: 8px 0;">
+                    ${index + 1}. <strong>${item.name}</strong> - ${item.cogs.toFixed(1)}% COGS
+                    <br><span style="font-size: 14px;">Profit per item: $${profit.toFixed(2)}</span>
+                </div>`;
+            });
+            document.getElementById('pushRecommendation').innerHTML = pushHTML;
+
+            // Weekly tip
+            const latte = menuItems.find(item => item.name.includes('MED Flavored Latte'));
+            const eggBite = menuItems.find(item => item.name.includes('Egg Bites'));
+            const latteProfit = latte.price - (latte.price * latte.cogs / 100);
+            const eggBiteProfit = eggBite.price - (eggBite.price * eggBite.cogs / 100);
+            const savings = latteProfit - eggBiteProfit;
+            document.getElementById('weeklyTip').textContent = `Every latte upsold instead of egg bites saves you $${savings.toFixed(2)} in profit!`;
+
+            // Display all menu items
+            const displayDiv = document.getElementById('menuItemsDisplay');
+            let html = '';
+
+            // Green items
+            if (greenItems.length > 0) {
+                html += '<div class="profit-item profit-green"><h3>✓ HIGH MARGIN ITEMS (Under 30% COGS)</h3>';
+                greenItems.sort((a, b) => a.cogs - b.cogs).forEach(item => {
+                    const profit = item.price - (item.price * item.cogs / 100);
+                    html += `<div style="padding: 8px; margin: 5px 0; background: rgba(255,255,255,0.5); border-radius: 4px;">
+                        <strong>${item.name}</strong> - ${item.cogs.toFixed(2)}% COGS | $${item.sales} sales
+                        <br><span style="font-size: 12px; color: #155724;">Profit per item: $${profit.toFixed(2)} | Price: $${item.price}</span>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            // Yellow items
+            if (yellowItems.length > 0) {
+                html += '<div class="profit-item profit-yellow"><h3>⚠ MEDIUM MARGIN ITEMS (30-45% COGS)</h3>';
+                yellowItems.sort((a, b) => a.cogs - b.cogs).forEach(item => {
+                    const profit = item.price - (item.price * item.cogs / 100);
+                    html += `<div style="padding: 8px; margin: 5px 0; background: rgba(255,255,255,0.5); border-radius: 4px;">
+                        <strong>${item.name}</strong> - ${item.cogs.toFixed(2)}% COGS | $${item.sales} sales
+                        <br><span style="font-size: 12px; color: #856404;">Profit per item: $${profit.toFixed(2)} | Price: $${item.price}</span>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            // Red items
+            if (redItems.length > 0) {
+                html += '<div class="profit-item profit-red"><h3>⛔ LOW MARGIN ITEMS (Over 45% COGS)</h3>';
+                redItems.sort((a, b) => b.cogs - a.cogs).forEach(item => {
+                    const profit = item.price - (item.price * item.cogs / 100);
+                    html += `<div style="padding: 8px; margin: 5px 0; background: rgba(255,255,255,0.5); border-radius: 4px;">
+                        <strong>${item.name}</strong> - ${item.cogs.toFixed(2)}% COGS | $${item.sales} sales
+                        <br><span style="font-size: 12px; color: #721c24;">Profit per item: $${profit.toFixed(2)} | Price: $${item.price} | Consider price increase or portion control</span>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            displayDiv.innerHTML = html;
         }
 
         function checkFriday() {
