@@ -153,9 +153,38 @@
                         <h3>Items Tracked</h3>
                         <div class="value"><span id="itemCount">0</span></div>
                     </div>
+                    <div class="card" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+                        <h3>🥛 Total Milk (gal)</h3>
+                        <div class="value"><span id="totalMilk">0</span></div>
+                    </div>
                 </div>
 
                 <div id="fridayAlert"></div>
+
+                <!-- Milk Status Summary -->
+                <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #333; margin-bottom: 15px;">🥛 Kroger Milk Status</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div style="background: white; padding: 15px; border-radius: 6px;">
+                            <div style="font-size: 13px; color: #666; margin-bottom: 5px;">2% Milk</div>
+                            <div style="font-size: 24px; font-weight: bold; color: #667eea;"><span id="milk2Percent">0</span> gal</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 5px;">Par: 25 gal</div>
+                            <div id="milk2Status" style="margin-top: 5px;"></div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 6px;">
+                            <div style="font-size: 13px; color: #666; margin-bottom: 5px;">Skim Milk</div>
+                            <div style="font-size: 24px; font-weight: bold; color: #667eea;"><span id="milkSkim">0</span> gal</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 5px;">Par: 8 gal</div>
+                            <div id="milkSkimStatus" style="margin-top: 5px;"></div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 6px;">
+                            <div style="font-size: 13px; color: #666; margin-bottom: 5px;">Whole Milk</div>
+                            <div style="font-size: 24px; font-weight: bold; color: #667eea;"><span id="milkWhole">0</span> gal</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 5px;">Par: 5 gal</div>
+                            <div id="milkWholeStatus" style="margin-top: 5px;"></div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="controls">
                     <button class="large" onclick="switchView('dailyCount'); startDailyCount();">📋 Start Daily Count</button>
@@ -764,6 +793,49 @@
             document.getElementById('currentDate').textContent = new Date().toLocaleDateString('en-US', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
             });
+
+            // Update milk status displays
+            const dairyCream = inventory["Dairy & Cream"] || [];
+            const milk2Percent = dairyCream.find(item => item.itemCode === "KRO-2PCT");
+            const milkSkim = dairyCream.find(item => item.itemCode === "KRO-SKIM");
+            const milkWhole = dairyCream.find(item => item.itemCode === "KRO-WHOLE");
+
+            let totalMilk = 0;
+
+            if (milk2Percent) {
+                document.getElementById('milk2Percent').textContent = milk2Percent.quantity;
+                totalMilk += milk2Percent.quantity;
+                const status2 = milk2Percent.quantity <= milk2Percent.minLevel / 2 ?
+                    '<span class="status-badge status-critical">CRITICAL</span>' :
+                    milk2Percent.quantity <= milk2Percent.minLevel ?
+                    '<span class="status-badge status-low">LOW</span>' :
+                    '<span class="status-badge status-ok">OK</span>';
+                document.getElementById('milk2Status').innerHTML = status2;
+            }
+
+            if (milkSkim) {
+                document.getElementById('milkSkim').textContent = milkSkim.quantity;
+                totalMilk += milkSkim.quantity;
+                const statusSkim = milkSkim.quantity <= milkSkim.minLevel / 2 ?
+                    '<span class="status-badge status-critical">CRITICAL</span>' :
+                    milkSkim.quantity <= milkSkim.minLevel ?
+                    '<span class="status-badge status-low">LOW</span>' :
+                    '<span class="status-badge status-ok">OK</span>';
+                document.getElementById('milkSkimStatus').innerHTML = statusSkim;
+            }
+
+            if (milkWhole) {
+                document.getElementById('milkWhole').textContent = milkWhole.quantity;
+                totalMilk += milkWhole.quantity;
+                const statusWhole = milkWhole.quantity <= milkWhole.minLevel / 2 ?
+                    '<span class="status-badge status-critical">CRITICAL</span>' :
+                    milkWhole.quantity <= milkWhole.minLevel ?
+                    '<span class="status-badge status-low">LOW</span>' :
+                    '<span class="status-badge status-ok">OK</span>';
+                document.getElementById('milkWholeStatus').innerHTML = statusWhole;
+            }
+
+            document.getElementById('totalMilk').textContent = totalMilk.toFixed(0);
         }
 
         function updateQuantity(category, index, value) {
