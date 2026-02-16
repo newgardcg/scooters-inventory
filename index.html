@@ -486,8 +486,11 @@
                 { name: "Flat Lid 1000ct", itemCode: "100357", unit: "case", cost: 34.00, minLevel: 2, quantity: 0 }
             ],
             "Dairy & Cream": [
-                { name: "Whipped Cream 12ct/15oz", itemCode: "100515", unit: "case", cost: 45.15, minLevel: 2, quantity: 0 },
-                { name: "Heavy Ice Cream Base 0.5gal/9ct", itemCode: "100729", unit: "case", cost: 54.10, minLevel: 1, quantity: 0 }
+                { name: "2% Reduced Fat Milk 1gal (Kroger)", itemCode: "KRO-2PCT", unit: "gallon", cost: 2.59, minLevel: 25, quantity: 0, supplier: "Kroger" },
+                { name: "Skim Milk 1gal (Kroger)", itemCode: "KRO-SKIM", unit: "gallon", cost: 2.59, minLevel: 8, quantity: 0, supplier: "Kroger" },
+                { name: "Whole Milk 1gal (Kroger)", itemCode: "KRO-WHOLE", unit: "gallon", cost: 2.59, minLevel: 5, quantity: 0, supplier: "Kroger" },
+                { name: "Whipped Cream 12ct/15oz", itemCode: "100515", unit: "case", cost: 45.15, minLevel: 2, quantity: 0, supplier: "Harvest" },
+                { name: "Heavy Ice Cream Base 0.5gal/9ct", itemCode: "100729", unit: "case", cost: 54.10, minLevel: 1, quantity: 0, supplier: "Harvest" }
             ],
             "Syrups & Sauces": [
                 { name: "Vanilla Syrup 64oz/4ct", itemCode: "100251", unit: "case", cost: 45.75, minLevel: 2, quantity: 0 },
@@ -825,81 +828,163 @@
         // Order Sheet
         function generateOrderSheet() {
             const content = document.getElementById('orderSheetContent');
-            const orderItems = [];
+            const krogerItems = [];
+            const harvestItems = [];
 
             for (const [category, items] of Object.entries(inventory)) {
                 items.forEach(item => {
                     if (item.quantity <= item.minLevel) {
                         const reorderQty = Math.ceil((item.minLevel * 2) - item.quantity);
-                        orderItems.push({
+                        const orderItem = {
                             category, name: item.name, itemCode: item.itemCode, unit: item.unit, current: item.quantity,
                             reorderQty, cost: item.cost, total: reorderQty * item.cost,
-                            status: item.quantity <= item.minLevel / 2 ? 'CRITICAL' : 'LOW'
-                        });
+                            status: item.quantity <= item.minLevel / 2 ? 'CRITICAL' : 'LOW',
+                            supplier: item.supplier || 'Harvest'
+                        };
+
+                        if (orderItem.supplier === 'Kroger') {
+                            krogerItems.push(orderItem);
+                        } else {
+                            harvestItems.push(orderItem);
+                        }
                     }
                 });
             }
 
-            if (orderItems.length === 0) {
+            if (krogerItems.length === 0 && harvestItems.length === 0) {
                 content.innerHTML = '<div class="alert-box alert-success">All items fully stocked!</div>';
                 return;
             }
 
-            const totalCost = orderItems.reduce((sum, item) => sum + item.total, 0);
-            let html = `<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3>Harvest Roasting Order - ${new Date().toLocaleDateString()}</h3>
-                <p><strong>Items:</strong> ${orderItems.length} | <strong>Total:</strong> $${totalCost.toFixed(2)}</p>
-            </div><table><thead><tr><th>Code</th><th>Item</th><th>Current</th><th>Order Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>`;
+            let html = '';
 
-            orderItems.forEach(item => {
-                html += `<tr class="${item.status === 'CRITICAL' ? 'low-stock' : ''}">
-                    <td><span class="item-code">${item.itemCode}</span></td>
-                    <td><strong>${item.name}</strong></td>
-                    <td>${item.current}</td>
-                    <td><strong>${item.reorderQty} ${item.unit}</strong></td>
-                    <td>$${item.cost.toFixed(2)}</td>
-                    <td><strong>$${item.total.toFixed(2)}</strong></td>
-                </tr>`;
-            });
+            // Kroger Order Section
+            if (krogerItems.length > 0) {
+                const krogerTotal = krogerItems.reduce((sum, item) => sum + item.total, 0);
+                html += `<div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0c5460;">
+                    <h3>🥛 Kroger Order - ${new Date().toLocaleDateString()}</h3>
+                    <p><strong>Items:</strong> ${krogerItems.length} | <strong>Total:</strong> $${krogerTotal.toFixed(2)}</p>
+                </div><table><thead><tr><th>Code</th><th>Item</th><th>Current</th><th>Order Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>`;
 
-            html += '</tbody></table>';
+                krogerItems.forEach(item => {
+                    html += `<tr class="${item.status === 'CRITICAL' ? 'low-stock' : ''}">
+                        <td><span class="item-code">${item.itemCode}</span></td>
+                        <td><strong>${item.name}</strong></td>
+                        <td>${item.current} ${item.unit}</td>
+                        <td><strong>${item.reorderQty} ${item.unit}</strong></td>
+                        <td>$${item.cost.toFixed(2)}</td>
+                        <td><strong>$${item.total.toFixed(2)}</strong></td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+            }
+
+            // Harvest Roasting Order Section
+            if (harvestItems.length > 0) {
+                const harvestTotal = harvestItems.reduce((sum, item) => sum + item.total, 0);
+                html += `<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3>📦 Harvest Roasting Order - ${new Date().toLocaleDateString()}</h3>
+                    <p><strong>Items:</strong> ${harvestItems.length} | <strong>Total:</strong> $${harvestTotal.toFixed(2)}</p>
+                </div><table><thead><tr><th>Code</th><th>Item</th><th>Current</th><th>Order Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>`;
+
+                harvestItems.forEach(item => {
+                    html += `<tr class="${item.status === 'CRITICAL' ? 'low-stock' : ''}">
+                        <td><span class="item-code">${item.itemCode}</span></td>
+                        <td><strong>${item.name}</strong></td>
+                        <td>${item.current}</td>
+                        <td><strong>${item.reorderQty} ${item.unit}</strong></td>
+                        <td>$${item.cost.toFixed(2)}</td>
+                        <td><strong>$${item.total.toFixed(2)}</strong></td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+            }
+
+            // Total Summary
+            const grandTotal = (krogerItems.reduce((sum, item) => sum + item.total, 0)) +
+                             (harvestItems.reduce((sum, item) => sum + item.total, 0));
+            html += `<div class="alert-box alert-success">
+                <strong>Grand Total (Both Suppliers):</strong> $${grandTotal.toFixed(2)}
+            </div>`;
+
             content.innerHTML = html;
         }
 
         function emailOrderSheet() {
-            const orderItems = [];
+            const krogerItems = [];
+            const harvestItems = [];
+
             for (const [category, items] of Object.entries(inventory)) {
                 items.forEach(item => {
                     if (item.quantity <= item.minLevel) {
                         const reorderQty = Math.ceil((item.minLevel * 2) - item.quantity);
-                        orderItems.push({
+                        const orderItem = {
                             category, name: item.name, itemCode: item.itemCode, unit: item.unit, current: item.quantity, reorderQty,
-                            cost: item.cost, total: reorderQty * item.cost
-                        });
+                            cost: item.cost, total: reorderQty * item.cost, supplier: item.supplier || 'Harvest'
+                        };
+
+                        if (orderItem.supplier === 'Kroger') {
+                            krogerItems.push(orderItem);
+                        } else {
+                            harvestItems.push(orderItem);
+                        }
                     }
                 });
             }
 
-            if (orderItems.length === 0) { alert('No items need ordering!'); return; }
+            if (krogerItems.length === 0 && harvestItems.length === 0) {
+                alert('No items need ordering!');
+                return;
+            }
 
-            const totalCost = orderItems.reduce((sum, item) => sum + item.total, 0);
-            let emailBody = `SCOOTERS COFFEE #2106 - HARVEST ROASTING ORDER\nDate: ${new Date().toLocaleDateString()}\nAllen, Texas\n\nSUMMARY:\nTotal Items: ${orderItems.length}\nEstimated Cost: $${totalCost.toFixed(2)}\n\nORDER LIST:\n${'='.repeat(70)}\n\n`;
+            let emailBody = `SCOOTERS COFFEE #2106 - WEEKLY ORDER\nDate: ${new Date().toLocaleDateString()}\nAllen, Texas\n\n`;
 
-            let currentCategory = '';
-            orderItems.forEach(item => {
-                if (item.category !== currentCategory) {
-                    currentCategory = item.category;
-                    emailBody += `\n${currentCategory.toUpperCase()}\n${'-'.repeat(50)}\n`;
-                }
-                emailBody += `Code: ${item.itemCode} - ${item.name}\n`;
-                emailBody += `  Current: ${item.current} | Order: ${item.reorderQty} ${item.unit}\n`;
-                emailBody += `  Cost: $${item.cost.toFixed(2)} each = $${item.total.toFixed(2)} total\n\n`;
-            });
+            // Kroger Order Section
+            if (krogerItems.length > 0) {
+                const krogerTotal = krogerItems.reduce((sum, item) => sum + item.total, 0);
+                emailBody += `${'='.repeat(70)}\nKROGER ORDER\n${'='.repeat(70)}\n\n`;
+                emailBody += `Total Items: ${krogerItems.length}\n`;
+                emailBody += `Estimated Cost: $${krogerTotal.toFixed(2)}\n\n`;
 
-            emailBody += `\n${'='.repeat(70)}\nTOTAL ORDER COST: $${totalCost.toFixed(2)}`;
+                krogerItems.forEach(item => {
+                    emailBody += `Code: ${item.itemCode} - ${item.name}\n`;
+                    emailBody += `  Current: ${item.current} ${item.unit} | Order: ${item.reorderQty} ${item.unit}\n`;
+                    emailBody += `  Cost: $${item.cost.toFixed(2)} each = $${item.total.toFixed(2)} total\n\n`;
+                });
+
+                emailBody += `KROGER TOTAL: $${krogerTotal.toFixed(2)}\n\n`;
+            }
+
+            // Harvest Roasting Order Section
+            if (harvestItems.length > 0) {
+                const harvestTotal = harvestItems.reduce((sum, item) => sum + item.total, 0);
+                emailBody += `${'='.repeat(70)}\nHARVEST ROASTING ORDER\n${'='.repeat(70)}\n\n`;
+                emailBody += `Total Items: ${harvestItems.length}\n`;
+                emailBody += `Estimated Cost: $${harvestTotal.toFixed(2)}\n\n`;
+
+                let currentCategory = '';
+                harvestItems.forEach(item => {
+                    if (item.category !== currentCategory) {
+                        currentCategory = item.category;
+                        emailBody += `\n${currentCategory.toUpperCase()}\n${'-'.repeat(50)}\n`;
+                    }
+                    emailBody += `Code: ${item.itemCode} - ${item.name}\n`;
+                    emailBody += `  Current: ${item.current} | Order: ${item.reorderQty} ${item.unit}\n`;
+                    emailBody += `  Cost: $${item.cost.toFixed(2)} each = $${item.total.toFixed(2)} total\n\n`;
+                });
+
+                emailBody += `HARVEST ROASTING TOTAL: $${harvestTotal.toFixed(2)}\n\n`;
+            }
+
+            // Grand Total
+            const grandTotal = (krogerItems.reduce((sum, item) => sum + item.total, 0)) +
+                             (harvestItems.reduce((sum, item) => sum + item.total, 0));
+            emailBody += `${'='.repeat(70)}\nGRAND TOTAL (BOTH SUPPLIERS): $${grandTotal.toFixed(2)}\n${'='.repeat(70)}`;
 
             const recipients = [settings.storeEmail, settings.managerEmails].filter(e => e).join(',');
-            const mailtoLink = `mailto:${recipients}?subject=${encodeURIComponent('Harvest Roasting Order - ' + new Date().toLocaleDateString())}&body=${encodeURIComponent(emailBody)}`;
+            const mailtoLink = `mailto:${recipients}?subject=${encodeURIComponent('Weekly Order - ' + new Date().toLocaleDateString())}&body=${encodeURIComponent(emailBody)}`;
             window.location.href = mailtoLink;
         }
 
