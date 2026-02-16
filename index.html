@@ -106,6 +106,8 @@
         .savings-box { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 25px; border-radius: 8px; margin: 20px 0; text-align: center; }
         .savings-amount { font-size: 42px; font-weight: bold; margin: 15px 0; }
 
+        .milk-box { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; padding: 25px; border-radius: 8px; margin: 20px 0; }
+        .milk-input { width: 100px; padding: 6px; margin: 5px; }
         .order-input { width: 80px; padding: 6px; }
 
         @media (max-width: 768px) {
@@ -114,7 +116,7 @@
             th, td { padding: 6px 4px; }
             .nav-tab { padding: 12px 10px; font-size: 11px; }
             .gap-display, .budget-display { font-size: 32px; padding: 20px; }
-            .order-input { width: 60px; }
+            .order-input, .milk-input { width: 60px; }
         }
     </style>
 </head>
@@ -199,7 +201,7 @@
                         <div class="value">$<span id="maxBudget">0</span></div>
                     </div>
                     <div class="card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-                        <h3>Current Order Total</h3>
+                        <h3>Harvest + Kroger Total</h3>
                         <div class="value">$<span id="orderTotal">0</span></div>
                     </div>
                     <div class="card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
@@ -219,6 +221,56 @@
 
                 <div id="budgetAlert"></div>
 
+                <!-- Kroger Milk Tracker -->
+                <div class="milk-box">
+                    <h3>🥛 Kroger Milk Tracker</h3>
+                    <p style="margin: 10px 0; font-size: 14px;">Track milk orders separately - ordered Mon & Thu (75 gal/week avg @ $2.59/gal)</p>
+
+                    <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <h4 style="margin-bottom: 10px;">Add Milk Order</h4>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+                            <div>
+                                <label style="font-size: 13px;">Date:</label>
+                                <input type="date" id="milkDate" class="milk-input">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px;">2% Milk (gal):</label>
+                                <input type="number" id="milk2Percent" class="milk-input" placeholder="25">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px;">Skim (gal):</label>
+                                <input type="number" id="milkSkim" class="milk-input" placeholder="4">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px;">Whole (gal):</label>
+                                <input type="number" id="milkWhole" class="milk-input" placeholder="4">
+                            </div>
+                            <button onclick="addMilkOrder()">Add Order</button>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.7); padding: 15px; border-radius: 8px;">
+                        <h4>This Week's Milk Summary</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                            <div style="background: white; padding: 10px; border-radius: 4px;">
+                                <div style="font-size: 12px; color: #666;">Total Gallons</div>
+                                <div style="font-size: 24px; font-weight: bold; color: #667eea;"><span id="milkTotalGal">0</span> gal</div>
+                            </div>
+                            <div style="background: white; padding: 10px; border-radius: 4px;">
+                                <div style="font-size: 12px; color: #666;">Weekly Cost</div>
+                                <div style="font-size: 24px; font-weight: bold; color: #667eea;">$<span id="milkWeeklyCost">0</span></div>
+                            </div>
+                            <div style="background: white; padding: 10px; border-radius: 4px;">
+                                <div style="font-size: 12px; color: #666;">Par Level</div>
+                                <div style="font-size: 20px; font-weight: bold;" id="milkParStatus">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="milkCostComparison" style="margin-top: 15px;"></div>
+                    <div id="milkHistory" style="margin-top: 15px;"></div>
+                </div>
+
                 <!-- Savings Tracker -->
                 <div class="savings-box">
                     <h3>💰 Savings This Month</h3>
@@ -228,7 +280,7 @@
 
                 <!-- Friday Order Assistant -->
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h3>📋 Friday Order Assistant</h3>
+                    <h3>📋 Harvest Roasting Order Assistant</h3>
                     <p style="margin: 10px 0; color: #666;">Suggested order based on your par levels. Adjust quantities as needed.</p>
 
                     <div class="controls">
@@ -394,7 +446,7 @@
     </div>
 
     <script>
-        // REAL HARVEST ROASTING INVENTORY - All Prices from Actual Invoices
+        // REAL HARVEST ROASTING INVENTORY
         let inventory = {
             "Beverages": [
                 { name: "Oat Milk 32oz/12ct", itemCode: "100209", unit: "case", cost: 25.50, minLevel: 2, quantity: 0 },
@@ -534,6 +586,19 @@
             "100764": { name: "Burrito Sausage Egg Cheese 36ct", parQty: 1, unit: "case", variance: "Low", history: [0, 2, 1] }
         };
 
+        // MILK TRACKING
+        const KROGER_MILK_PRICE = 2.59;
+        const HARVEST_MILK_PRICE = 4.50; // Estimated if buying from Harvest
+        let milkOrders = [];
+
+        // Milk par levels (75 gal/week total)
+        const milkParLevels = {
+            twoPercent: 50,
+            skim: 15,
+            whole: 10,
+            total: 75
+        };
+
         // REAL MENU ITEMS FROM BRINK POWER BI - January 2026
         let menuItems = [
             { name: "MED Iced Flavored Latte", sales: 448, cogs: 21.61, price: 5.50 },
@@ -605,6 +670,10 @@
             const savedOrders = localStorage.getItem('scootersOrders');
             if (savedOrders) {
                 orderHistory = JSON.parse(savedOrders);
+            }
+            const savedMilk = localStorage.getItem('scootersMilk');
+            if (savedMilk) {
+                milkOrders = JSON.parse(savedMilk);
             }
             const savedSales = localStorage.getItem('scootersWeeklySales');
             if (savedSales) {
@@ -834,6 +903,134 @@
             window.location.href = mailtoLink;
         }
 
+        // MILK TRACKING FUNCTIONS
+        function addMilkOrder() {
+            const date = document.getElementById('milkDate').value;
+            const twoPercent = parseFloat(document.getElementById('milk2Percent').value) || 0;
+            const skim = parseFloat(document.getElementById('milkSkim').value) || 0;
+            const whole = parseFloat(document.getElementById('milkWhole').value) || 0;
+
+            if (!date || (twoPercent === 0 && skim === 0 && whole === 0)) {
+                alert('Please enter date and at least one milk type!');
+                return;
+            }
+
+            const totalGal = twoPercent + skim + whole;
+            const cost = totalGal * KROGER_MILK_PRICE;
+
+            milkOrders.push({
+                date,
+                twoPercent,
+                skim,
+                whole,
+                totalGal,
+                cost,
+                timestamp: Date.now()
+            });
+
+            localStorage.setItem('scootersMilk', JSON.stringify(milkOrders));
+
+            // Clear form
+            document.getElementById('milkDate').value = '';
+            document.getElementById('milk2Percent').value = '';
+            document.getElementById('milkSkim').value = '';
+            document.getElementById('milkWhole').value = '';
+
+            updateSmartOrderDisplay();
+            alert(`Milk order added! ${totalGal} gal @ $${cost.toFixed(2)}`);
+        }
+
+        function getWeeklyMilkTotal() {
+            const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            const weekOrders = milkOrders.filter(order => order.timestamp > oneWeekAgo);
+
+            let totalGal = 0;
+            let totalCost = 0;
+            let twoPercent = 0, skim = 0, whole = 0;
+
+            weekOrders.forEach(order => {
+                totalGal += order.totalGal;
+                totalCost += order.cost;
+                twoPercent += order.twoPercent;
+                skim += order.skim;
+                whole += order.whole;
+            });
+
+            return { totalGal, totalCost, twoPercent, skim, whole, orderCount: weekOrders.length };
+        }
+
+        function displayMilkSummary() {
+            const weekly = getWeeklyMilkTotal();
+
+            document.getElementById('milkTotalGal').textContent = weekly.totalGal.toFixed(0);
+            document.getElementById('milkWeeklyCost').textContent = weekly.totalCost.toFixed(2);
+
+            // Par level status
+            let parStatus = '';
+            let parColor = '';
+            if (weekly.totalGal < milkParLevels.total * 0.8) {
+                parStatus = '⚠️ Under';
+                parColor = '#856404';
+            } else if (weekly.totalGal > milkParLevels.total * 1.2) {
+                parStatus = '⚠️ Over';
+                parColor = '#721c24';
+            } else {
+                parStatus = '✓ On Track';
+                parColor = '#155724';
+            }
+            document.getElementById('milkParStatus').innerHTML = `<span style="color: ${parColor}">${parStatus}</span>`;
+
+            // Cost comparison
+            const harvestCost = weekly.totalGal * HARVEST_MILK_PRICE;
+            const savings = harvestCost - weekly.totalCost;
+            const monthlySavings = savings * 4.33;
+
+            document.getElementById('milkCostComparison').innerHTML = `
+                <div style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px;">
+                    <h4>💰 Cost Comparison</h4>
+                    <table style="width: 100%; margin-top: 10px; background: white;">
+                        <tr>
+                            <td><strong>Kroger Price:</strong></td>
+                            <td>$${KROGER_MILK_PRICE.toFixed(2)}/gal</td>
+                            <td><strong>This Week:</strong> $${weekly.totalCost.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Harvest Price:</strong></td>
+                            <td>$${HARVEST_MILK_PRICE.toFixed(2)}/gal</td>
+                            <td><strong>Would Cost:</strong> $${harvestCost.toFixed(2)}</td>
+                        </tr>
+                        <tr class="green">
+                            <td colspan="2"><strong>Weekly Savings:</strong></td>
+                            <td><strong>$${savings.toFixed(2)}</strong></td>
+                        </tr>
+                        <tr class="green">
+                            <td colspan="2"><strong>Monthly Savings:</strong></td>
+                            <td><strong>$${monthlySavings.toFixed(2)}</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            `;
+
+            // Milk history
+            if (milkOrders.length > 0) {
+                let historyHtml = '<div style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px;"><h4>Recent Orders</h4><table style="width: 100%; margin-top: 10px; background: white;"><thead><tr><th>Date</th><th>2%</th><th>Skim</th><th>Whole</th><th>Total (gal)</th><th>Cost</th></tr></thead><tbody>';
+
+                milkOrders.slice().reverse().slice(0, 5).forEach(order => {
+                    historyHtml += `<tr>
+                        <td>${new Date(order.date).toLocaleDateString()}</td>
+                        <td>${order.twoPercent}</td>
+                        <td>${order.skim}</td>
+                        <td>${order.whole}</td>
+                        <td><strong>${order.totalGal}</strong></td>
+                        <td>$${order.cost.toFixed(2)}</td>
+                    </tr>`;
+                });
+
+                historyHtml += '</tbody></table></div>';
+                document.getElementById('milkHistory').innerHTML = historyHtml;
+            }
+        }
+
         // SMART ORDER BUDGET
         function setWeeklySales() {
             weeklySales = parseFloat(document.getElementById('weekSalesInput').value) || 8750;
@@ -842,9 +1039,11 @@
         }
 
         function updateSmartOrderDisplay() {
-            // Update summary cards
+            // Calculate totals including milk
             const maxBudget = weeklySales * 0.32;
-            const orderTotal = calculateOrderTotal();
+            const harvestTotal = calculateOrderTotal();
+            const milkTotal = getWeeklyMilkTotal().totalCost;
+            const orderTotal = harvestTotal + milkTotal;
             const remaining = maxBudget - orderTotal;
 
             document.getElementById('weeklySales').textContent = weeklySales.toFixed(0);
@@ -857,23 +1056,38 @@
             const alertDiv = document.getElementById('budgetAlert');
             if (orderTotal === 0) {
                 alertDiv.innerHTML = '';
-            } else if (remaining < 0) {
-                alertDiv.innerHTML = `<div class="alert-box alert-danger">
-                    <h3>⚠️ OVER BUDGET!</h3>
-                    <p style="font-size: 32px; margin: 10px 0;">You are $${Math.abs(remaining).toFixed(2)} OVER your COGS budget!</p>
-                    <p>Reduce your order or increase sales to stay within 32% COGS target.</p>
-                </div>`;
-            } else if (remaining < maxBudget * 0.1) {
-                alertDiv.innerHTML = `<div class="alert-box alert-warning">
-                    <h3>⚠️ Close to Budget Limit</h3>
-                    <p>You have $${remaining.toFixed(2)} remaining (${(remaining / maxBudget * 100).toFixed(1)}% of budget)</p>
-                </div>`;
             } else {
-                alertDiv.innerHTML = `<div class="alert-box alert-success">
-                    <h3>✓ Within Budget</h3>
-                    <p>You have $${remaining.toFixed(2)} remaining (${(remaining / maxBudget * 100).toFixed(1)}% of budget)</p>
+                let breakdownHtml = `<div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                    <strong>Budget Breakdown:</strong><br>
+                    Harvest Roasting: $${harvestTotal.toFixed(2)}<br>
+                    Kroger Milk: $${milkTotal.toFixed(2)}<br>
+                    <strong>Total COGS: $${orderTotal.toFixed(2)}</strong>
                 </div>`;
+
+                if (remaining < 0) {
+                    alertDiv.innerHTML = `<div class="alert-box alert-danger">
+                        <h3>⚠️ OVER BUDGET!</h3>
+                        <p style="font-size: 32px; margin: 10px 0;">You are $${Math.abs(remaining).toFixed(2)} OVER your COGS budget!</p>
+                        ${breakdownHtml}
+                        <p>Reduce your order or increase sales to stay within 32% COGS target.</p>
+                    </div>`;
+                } else if (remaining < maxBudget * 0.1) {
+                    alertDiv.innerHTML = `<div class="alert-box alert-warning">
+                        <h3>⚠️ Close to Budget Limit</h3>
+                        <p>You have $${remaining.toFixed(2)} remaining (${(remaining / maxBudget * 100).toFixed(1)}% of budget)</p>
+                        ${breakdownHtml}
+                    </div>`;
+                } else {
+                    alertDiv.innerHTML = `<div class="alert-box alert-success">
+                        <h3>✓ Within Budget</h3>
+                        <p>You have $${remaining.toFixed(2)} remaining (${(remaining / maxBudget * 100).toFixed(1)}% of budget)</p>
+                        ${breakdownHtml}
+                    </div>`;
+                }
             }
+
+            // Display milk summary
+            displayMilkSummary();
 
             // Display par levels
             displayParLevels();
@@ -1033,7 +1247,9 @@
                 return;
             }
 
-            const orderTotal = calculateOrderTotal();
+            const harvestTotal = calculateOrderTotal();
+            const milkTotal = getWeeklyMilkTotal().totalCost;
+            const orderTotal = harvestTotal + milkTotal;
             const maxBudget = weeklySales * 0.32;
             const remaining = maxBudget - orderTotal;
 
@@ -1041,11 +1257,13 @@
             emailBody += `BUDGET SUMMARY:\n${'='.repeat(70)}\n`;
             emailBody += `Weekly Sales: $${weeklySales.toFixed(2)}\n`;
             emailBody += `Max COGS Budget (32%): $${maxBudget.toFixed(2)}\n`;
-            emailBody += `This Order Total: $${orderTotal.toFixed(2)}\n`;
+            emailBody += `Harvest Roasting Order: $${harvestTotal.toFixed(2)}\n`;
+            emailBody += `Kroger Milk (this week): $${milkTotal.toFixed(2)}\n`;
+            emailBody += `Total COGS: $${orderTotal.toFixed(2)}\n`;
             emailBody += `Remaining Budget: $${remaining.toFixed(2)}\n`;
             emailBody += `Status: ${remaining >= 0 ? '✓ WITHIN BUDGET' : '⚠️ OVER BUDGET'}\n\n`;
 
-            emailBody += `ORDER DETAILS:\n${'='.repeat(70)}\n\n`;
+            emailBody += `HARVEST ROASTING ORDER:\n${'='.repeat(70)}\n\n`;
 
             for (const [code, data] of Object.entries(currentOrder)) {
                 if (data.quantity > 0) {
@@ -1061,7 +1279,7 @@
             }
 
             emailBody += `\n${'='.repeat(70)}\n`;
-            emailBody += `TOTAL ORDER: $${orderTotal.toFixed(2)}\n`;
+            emailBody += `HARVEST ROASTING TOTAL: $${harvestTotal.toFixed(2)}\n`;
             emailBody += `\nGenerated by Smart Order Budget - https://newgardcg.github.io/scooters-inventory/`;
 
             const recipients = [settings.storeEmail, settings.managerEmails].filter(e => e).join(',');
@@ -1197,7 +1415,6 @@
 
         // Menu Profitability Tracker
         function updateMenuDisplay() {
-            // Calculate profitability metrics
             const greenItems = menuItems.filter(item => item.cogs < 30);
             const yellowItems = menuItems.filter(item => item.cogs >= 30 && item.cogs <= 45);
             const redItems = menuItems.filter(item => item.cogs > 45);
@@ -1205,7 +1422,6 @@
             const avgCOGS = menuItems.reduce((sum, item) => sum + item.cogs, 0) / menuItems.length;
             document.getElementById('avgCOGS').textContent = avgCOGS.toFixed(2);
 
-            // Best and worst items
             const sortedByCOGS = [...menuItems].sort((a, b) => a.cogs - b.cogs);
             const best = sortedByCOGS[0];
             const worst = sortedByCOGS[sortedByCOGS.length - 1];
@@ -1213,7 +1429,6 @@
             document.getElementById('bestItem').innerHTML = `<strong>${best.name}</strong><br>${best.cogs.toFixed(2)}% COGS | $${best.sales} sales`;
             document.getElementById('worstItem').innerHTML = `<strong>${worst.name}</strong><br>${worst.cogs.toFixed(2)}% COGS | $${worst.sales} sales`;
 
-            // Push recommendation - top 3 best margin items
             const topMargin = sortedByCOGS.slice(0, 3);
             let pushHTML = '<div style="font-size: 18px; font-weight: 600; margin-bottom: 15px;">Push These High-Margin Items Today:</div>';
             topMargin.forEach((item, index) => {
@@ -1225,7 +1440,6 @@
             });
             document.getElementById('pushRecommendation').innerHTML = pushHTML;
 
-            // Weekly tip
             const latte = menuItems.find(item => item.name.includes('MED Flavored Latte'));
             const eggBite = menuItems.find(item => item.name.includes('Egg Bites'));
             const latteProfit = latte.price - (latte.price * latte.cogs / 100);
@@ -1233,11 +1447,9 @@
             const savings = latteProfit - eggBiteProfit;
             document.getElementById('weeklyTip').textContent = `Every latte upsold instead of egg bites saves you $${savings.toFixed(2)} in profit!`;
 
-            // Display all menu items
             const displayDiv = document.getElementById('menuItemsDisplay');
             let html = '';
 
-            // Green items
             if (greenItems.length > 0) {
                 html += '<div class="profit-item profit-green"><h3>✓ HIGH MARGIN ITEMS (Under 30% COGS)</h3>';
                 greenItems.sort((a, b) => a.cogs - b.cogs).forEach(item => {
@@ -1250,7 +1462,6 @@
                 html += '</div>';
             }
 
-            // Yellow items
             if (yellowItems.length > 0) {
                 html += '<div class="profit-item profit-yellow"><h3>⚠ MEDIUM MARGIN ITEMS (30-45% COGS)</h3>';
                 yellowItems.sort((a, b) => a.cogs - b.cogs).forEach(item => {
@@ -1263,7 +1474,6 @@
                 html += '</div>';
             }
 
-            // Red items
             if (redItems.length > 0) {
                 html += '<div class="profit-item profit-red"><h3>⛔ LOW MARGIN ITEMS (Over 45% COGS)</h3>';
                 redItems.sort((a, b) => b.cogs - a.cogs).forEach(item => {
