@@ -34,7 +34,7 @@
         h3 { font-size: 18px; margin-bottom: 10px; }
 
         .nav-tabs { display: flex; background: #f8f9fa; border-bottom: 2px solid #dee2e6; overflow-x: auto; }
-        .nav-tab { padding: 15px 20px; cursor: pointer; border: none; background: transparent; font-weight: 600; color: #666; transition: all 0.3s; white-space: nowrap; font-size: 13px; }
+        .nav-tab { padding: 15px 18px; cursor: pointer; border: none; background: transparent; font-weight: 600; color: #666; transition: all 0.3s; white-space: nowrap; font-size: 12px; }
         .nav-tab:hover { background: #e9ecef; }
         .nav-tab.active { background: white; color: #667eea; border-bottom: 3px solid #667eea; }
         .content { padding: 30px; }
@@ -65,6 +65,7 @@
         tr.green { background: #d4edda; }
         tr.yellow { background: #fff3cd; }
         tr.red { background: #f8d7da; }
+        tr.over-order { background: #f8d7da; }
 
         input[type="number"], input[type="text"], input[type="email"], input[type="date"], textarea, select {
             width: 100%; padding: 8px; border: 2px solid #dee2e6; border-radius: 4px; font-size: 14px;
@@ -82,6 +83,11 @@
         .item-code { color: #667eea; font-family: monospace; font-size: 11px; }
 
         .gap-display { font-size: 48px; color: #dc3545; font-weight: bold; text-align: center; padding: 30px; background: #f8d7da; border-radius: 8px; margin: 20px 0; }
+        .budget-display { font-size: 48px; font-weight: bold; text-align: center; padding: 30px; border-radius: 8px; margin: 20px 0; }
+        .budget-ok { background: #d4edda; color: #155724; }
+        .budget-warning { background: #fff3cd; color: #856404; }
+        .budget-danger { background: #f8d7da; color: #721c24; }
+
         .checklist { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
         .checklist-item { padding: 10px; margin: 5px 0; background: white; border-radius: 4px; display: flex; align-items: center; }
         .checklist-item input[type="checkbox"] { margin-right: 10px; width: 20px; height: 20px; }
@@ -97,12 +103,18 @@
         .profit-yellow { background: #fff3cd; border-left: 4px solid #ffc107; }
         .profit-red { background: #f8d7da; border-left: 4px solid #dc3545; }
 
+        .savings-box { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 25px; border-radius: 8px; margin: 20px 0; text-align: center; }
+        .savings-amount { font-size: 42px; font-weight: bold; margin: 15px 0; }
+
+        .order-input { width: 80px; padding: 6px; }
+
         @media (max-width: 768px) {
             .content { padding: 15px; }
             table { font-size: 11px; }
             th, td { padding: 6px 4px; }
-            .nav-tab { padding: 12px 12px; font-size: 12px; }
-            .gap-display { font-size: 32px; padding: 20px; }
+            .nav-tab { padding: 12px 10px; font-size: 11px; }
+            .gap-display, .budget-display { font-size: 32px; padding: 20px; }
+            .order-input { width: 60px; }
         }
     </style>
 </head>
@@ -117,6 +129,7 @@
             <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
             <button class="nav-tab" onclick="switchView('dailyCount')">Daily Count</button>
             <button class="nav-tab" onclick="switchView('orderSheet')">Order Sheet</button>
+            <button class="nav-tab" onclick="switchView('smartOrder')">Smart Order</button>
             <button class="nav-tab" onclick="switchView('cogsGap')">COGS Gap</button>
             <button class="nav-tab" onclick="switchView('menuProfit')">Menu Profit</button>
             <button class="nav-tab" onclick="switchView('settings')">Settings</button>
@@ -144,9 +157,9 @@
 
                 <div class="controls">
                     <button class="large" onclick="switchView('dailyCount'); startDailyCount();">📋 Start Daily Count</button>
+                    <button class="secondary" onclick="switchView('smartOrder')">🎯 Smart Order Budget</button>
                     <button class="secondary" onclick="switchView('orderSheet')">📧 Order Sheet</button>
-                    <button class="secondary" onclick="switchView('cogsGap')">📊 COGS Gap Tracker</button>
-                    <button class="secondary" onclick="switchView('menuProfit')">💰 Menu Profitability</button>
+                    <button class="secondary" onclick="switchView('cogsGap')">📊 COGS Gap</button>
                 </div>
 
                 <div id="inventoryContainer"></div>
@@ -169,6 +182,72 @@
                     <button class="success" onclick="emailOrderSheet()">📧 Email Order Sheet</button>
                 </div>
                 <div id="orderSheetContent"></div>
+            </div>
+
+            <!-- Smart Order Budget -->
+            <div id="smartOrder" class="view">
+                <h2>🎯 Smart Order Budget</h2>
+
+                <!-- Weekly Budget Calculator -->
+                <div class="summary-cards">
+                    <div class="card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                        <h3>Weekly Sales</h3>
+                        <div class="value">$<span id="weeklySales">0</span></div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                        <h3>Max Budget (32%)</h3>
+                        <div class="value">$<span id="maxBudget">0</span></div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <h3>Current Order Total</h3>
+                        <div class="value">$<span id="orderTotal">0</span></div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <h3>Budget Remaining</h3>
+                        <div class="value">$<span id="budgetRemaining">0</span></div>
+                    </div>
+                </div>
+
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3>Set This Week's Sales</h3>
+                    <div class="form-group">
+                        <label>Weekly Net Sales ($):</label>
+                        <input type="number" id="weekSalesInput" placeholder="8750" value="8750">
+                        <button onclick="setWeeklySales()" style="margin-top: 10px;">Calculate Budget</button>
+                    </div>
+                </div>
+
+                <div id="budgetAlert"></div>
+
+                <!-- Savings Tracker -->
+                <div class="savings-box">
+                    <h3>💰 Savings This Month</h3>
+                    <div class="savings-amount">$<span id="monthlySavings">0</span></div>
+                    <p style="font-size: 14px; opacity: 0.9;">Keep ordering at par level to maximize savings!</p>
+                </div>
+
+                <!-- Friday Order Assistant -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3>📋 Friday Order Assistant</h3>
+                    <p style="margin: 10px 0; color: #666;">Suggested order based on your par levels. Adjust quantities as needed.</p>
+
+                    <div class="controls">
+                        <button onclick="loadSuggestedOrder()">Load Suggested Order</button>
+                        <button class="success" onclick="emailSmartOrder()">📧 Email Order to Harvest Roasting</button>
+                        <button class="secondary" onclick="saveCurrentOrder()">💾 Save This Order</button>
+                    </div>
+
+                    <div id="smartOrderTable"></div>
+                </div>
+
+                <!-- Over-Order Detector -->
+                <div id="overOrderAlert"></div>
+
+                <!-- Par Level Reference -->
+                <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0c5460;">
+                    <h3>📊 Par Levels (Based on Last 3 Orders)</h3>
+                    <div id="parLevelsDisplay"></div>
+                </div>
             </div>
 
             <!-- COGS Gap Tracker -->
@@ -423,6 +502,38 @@
             ]
         };
 
+        // PAR LEVELS based on last 3 orders
+        let parLevels = {
+            "100209": { name: "Oat Milk 32oz/12ct", parQty: 3, unit: "case", variance: "Low", history: [3, 3, 2] },
+            "100210": { name: "Almond Milk 32oz/12ct", parQty: 2, unit: "case", variance: "Low", history: [1, 3, 2] },
+            "100211": { name: "Coconut Milk 32oz/12ct", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 0] },
+            "100793": { name: "Red Bull Tropical 24ct", parQty: 3, unit: "case", variance: "Low", history: [3, 4, 3] },
+            "100794": { name: "Red Bull Sugar Free 24ct", parQty: 2, unit: "case", variance: "Low", history: [2, 2, 1] },
+            "102232": { name: "Sparkling Water 12ct", parQty: 2, unit: "case", variance: "Medium", history: [1, 2, 3] },
+            "100528": { name: "Scooters Blend Whole Beans 5lb/2ct", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 0] },
+            "100578": { name: "Espresso Whole Beans 5lb/4ct", parQty: 1, unit: "case", variance: "Medium", history: [0, 2, 2] },
+            "102275": { name: "Dark Roast Whole Beans 2lb/2ct", parQty: 1, unit: "case", variance: "High", history: [1, 2, 0] },
+            "100568": { name: "House Cold Brew 5lb/2ct", parQty: 1, unit: "case", variance: "Low", history: [0, 1, 1] },
+            "100251": { name: "Vanilla Syrup 64oz/4ct", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 0] },
+            "100254": { name: "Caramel Sauce 64oz/4ct", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 1] },
+            "100435": { name: "Chai Syrup 64oz/4ct", parQty: 1, unit: "case", variance: "Medium", history: [1, 0, 1] },
+            "102090": { name: "Strawberry Syrup 1L/4ct", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 0] },
+            "100436": { name: "Matcha 1lb", parQty: 3, unit: "each", variance: "Low", history: [3, 2, 3] },
+            "100729": { name: "Heavy Ice Cream Base 0.5gal/9ct", parQty: 2, unit: "case", variance: "Medium", history: [1, 2, 3] },
+            "100144": { name: "Everything Bagel Spicy Sausage 24ct", parQty: 2, unit: "case", variance: "Low", history: [2, 1, 2] },
+            "100145": { name: "Maple Waffle Sandwich 24ct", parQty: 1, unit: "case", variance: "Medium", history: [2, 2, 0] },
+            "100345": { name: "Ciabatta Bacon Egg Gouda 24ct", parQty: 1, unit: "case", variance: "Medium", history: [2, 2, 0] },
+            "102224": { name: "French Toastie Sandwich 24ct", parQty: 1, unit: "case", variance: "High", history: [0, 0, 2] },
+            "100532": { name: "Cinnamon Roll 15ct", parQty: 2, unit: "case", variance: "High", history: [2, 0, 3] },
+            "100747": { name: "Mini Blueberry Muffins 90ct", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 1] },
+            "102215": { name: "Banana Streusel Muffins 32ct", parQty: 1, unit: "case", variance: "Medium", history: [2, 1, 0] },
+            "100520": { name: "Oreo Cake Bite 18ct", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 1] },
+            "102118": { name: "Mini Chocolate Chip Cookie 6lb", parQty: 1, unit: "case", variance: "Low", history: [1, 1, 2] },
+            "100765": { name: "Tomato Feta Egg Bites 32ct", parQty: 1, unit: "case", variance: "Low", history: [0, 1, 1] },
+            "100766": { name: "Bacon Gouda Egg Bites 32ct", parQty: 1, unit: "case", variance: "High", history: [0, 2, 0] },
+            "100764": { name: "Burrito Sausage Egg Cheese 36ct", parQty: 1, unit: "case", variance: "Low", history: [0, 2, 1] }
+        };
+
         // REAL MENU ITEMS FROM BRINK POWER BI - January 2026
         let menuItems = [
             { name: "MED Iced Flavored Latte", sales: 448, cogs: 21.61, price: 5.50 },
@@ -453,6 +564,11 @@
         ];
 
         let cogsData = [];
+        let orderHistory = [];
+        let currentOrder = {};
+        let weeklySales = 8750;
+        let monthlySavings = 0;
+
         let settings = {
             storeEmail: 'store2106@gmail.com',
             managerEmails: 'newgardcg@gmail.com'
@@ -486,9 +602,23 @@
             if (savedCOGS) {
                 cogsData = JSON.parse(savedCOGS);
             }
+            const savedOrders = localStorage.getItem('scootersOrders');
+            if (savedOrders) {
+                orderHistory = JSON.parse(savedOrders);
+            }
+            const savedSales = localStorage.getItem('scootersWeeklySales');
+            if (savedSales) {
+                weeklySales = parseFloat(savedSales);
+                document.getElementById('weekSalesInput').value = weeklySales;
+            }
+            const savedSavings = localStorage.getItem('scootersMonthlySavings');
+            if (savedSavings) {
+                monthlySavings = parseFloat(savedSavings);
+            }
             updateDisplay();
             updateCOGSDisplay();
             updateMenuDisplay();
+            updateSmartOrderDisplay();
             checkFriday();
         }
 
@@ -512,6 +642,7 @@
             if (viewName === 'orderSheet') generateOrderSheet();
             if (viewName === 'cogsGap') updateCOGSDisplay();
             if (viewName === 'menuProfit') updateMenuDisplay();
+            if (viewName === 'smartOrder') updateSmartOrderDisplay();
         }
 
         function updateDisplay() {
@@ -700,6 +831,241 @@
 
             const recipients = [settings.storeEmail, settings.managerEmails].filter(e => e).join(',');
             const mailtoLink = `mailto:${recipients}?subject=${encodeURIComponent('Harvest Roasting Order - ' + new Date().toLocaleDateString())}&body=${encodeURIComponent(emailBody)}`;
+            window.location.href = mailtoLink;
+        }
+
+        // SMART ORDER BUDGET
+        function setWeeklySales() {
+            weeklySales = parseFloat(document.getElementById('weekSalesInput').value) || 8750;
+            localStorage.setItem('scootersWeeklySales', weeklySales);
+            updateSmartOrderDisplay();
+        }
+
+        function updateSmartOrderDisplay() {
+            // Update summary cards
+            const maxBudget = weeklySales * 0.32;
+            const orderTotal = calculateOrderTotal();
+            const remaining = maxBudget - orderTotal;
+
+            document.getElementById('weeklySales').textContent = weeklySales.toFixed(0);
+            document.getElementById('maxBudget').textContent = maxBudget.toFixed(2);
+            document.getElementById('orderTotal').textContent = orderTotal.toFixed(2);
+            document.getElementById('budgetRemaining').textContent = remaining.toFixed(2);
+            document.getElementById('monthlySavings').textContent = monthlySavings.toFixed(2);
+
+            // Budget alert
+            const alertDiv = document.getElementById('budgetAlert');
+            if (orderTotal === 0) {
+                alertDiv.innerHTML = '';
+            } else if (remaining < 0) {
+                alertDiv.innerHTML = `<div class="alert-box alert-danger">
+                    <h3>⚠️ OVER BUDGET!</h3>
+                    <p style="font-size: 32px; margin: 10px 0;">You are $${Math.abs(remaining).toFixed(2)} OVER your COGS budget!</p>
+                    <p>Reduce your order or increase sales to stay within 32% COGS target.</p>
+                </div>`;
+            } else if (remaining < maxBudget * 0.1) {
+                alertDiv.innerHTML = `<div class="alert-box alert-warning">
+                    <h3>⚠️ Close to Budget Limit</h3>
+                    <p>You have $${remaining.toFixed(2)} remaining (${(remaining / maxBudget * 100).toFixed(1)}% of budget)</p>
+                </div>`;
+            } else {
+                alertDiv.innerHTML = `<div class="alert-box alert-success">
+                    <h3>✓ Within Budget</h3>
+                    <p>You have $${remaining.toFixed(2)} remaining (${(remaining / maxBudget * 100).toFixed(1)}% of budget)</p>
+                </div>`;
+            }
+
+            // Display par levels
+            displayParLevels();
+        }
+
+        function calculateOrderTotal() {
+            let total = 0;
+            for (const [code, data] of Object.entries(currentOrder)) {
+                const item = findItemByCode(code);
+                if (item && data.quantity > 0) {
+                    total += item.cost * data.quantity;
+                }
+            }
+            return total;
+        }
+
+        function findItemByCode(code) {
+            for (const [category, items] of Object.entries(inventory)) {
+                const item = items.find(i => i.itemCode === code);
+                if (item) return item;
+            }
+            return null;
+        }
+
+        function loadSuggestedOrder() {
+            currentOrder = {};
+            let html = '<table><thead><tr><th>Code</th><th>Item</th><th>Par Level</th><th>Order Qty</th><th>Cost</th><th>Total</th><th>Variance</th></tr></thead><tbody>';
+
+            for (const [code, data] of Object.entries(parLevels)) {
+                const item = findItemByCode(code);
+                if (item) {
+                    currentOrder[code] = { quantity: data.parQty };
+                    const itemTotal = item.cost * data.parQty;
+                    const varianceClass = data.variance === 'High' ? 'red' : data.variance === 'Medium' ? 'yellow' : '';
+
+                    html += `<tr class="${varianceClass}">
+                        <td><span class="item-code">${code}</span></td>
+                        <td><strong>${data.name}</strong></td>
+                        <td>${data.parQty} ${data.unit}</td>
+                        <td><input type="number" class="order-input" value="${data.parQty}" onchange="updateOrderQty('${code}', this.value)"></td>
+                        <td>$${item.cost.toFixed(2)}</td>
+                        <td><strong>$${itemTotal.toFixed(2)}</strong></td>
+                        <td><span class="status-badge ${varianceClass ? 'status-critical' : 'status-ok'}">${data.variance}</span></td>
+                    </tr>`;
+                }
+            }
+
+            html += '</tbody></table>';
+            document.getElementById('smartOrderTable').innerHTML = html;
+            updateSmartOrderDisplay();
+            checkOverOrder();
+        }
+
+        function updateOrderQty(code, value) {
+            const qty = parseFloat(value) || 0;
+            currentOrder[code] = { quantity: qty };
+            updateSmartOrderDisplay();
+            checkOverOrder();
+        }
+
+        function checkOverOrder() {
+            if (orderHistory.length === 0) return;
+
+            const lastOrder = orderHistory[orderHistory.length - 1];
+            const overOrders = [];
+
+            for (const [code, data] of Object.entries(currentOrder)) {
+                const lastQty = lastOrder.items[code] || 0;
+                if (data.quantity > lastQty) {
+                    const item = findItemByCode(code);
+                    overOrders.push({
+                        name: parLevels[code]?.name || item.name,
+                        lastQty,
+                        newQty: data.quantity,
+                        increase: data.quantity - lastQty,
+                        wasteValue: (data.quantity - lastQty) * item.cost
+                    });
+                }
+            }
+
+            const alertDiv = document.getElementById('overOrderAlert');
+            if (overOrders.length > 0) {
+                let html = `<div class="alert-box alert-warning" style="margin-top: 20px;">
+                    <h3>⚠️ Over-Order Alert</h3>
+                    <p>You are ordering MORE of these items than last week:</p>
+                    <table style="margin-top: 10px; background: white;"><thead><tr><th>Item</th><th>Last Week</th><th>This Week</th><th>Increase</th><th>Potential Waste</th></tr></thead><tbody>`;
+
+                overOrders.forEach(item => {
+                    html += `<tr class="over-order">
+                        <td><strong>${item.name}</strong></td>
+                        <td>${item.lastQty}</td>
+                        <td>${item.newQty}</td>
+                        <td>+${item.increase}</td>
+                        <td><strong>$${item.wasteValue.toFixed(2)}</strong></td>
+                    </tr>`;
+                });
+
+                const totalWaste = overOrders.reduce((sum, item) => sum + item.wasteValue, 0);
+                html += `</tbody></table><p style="margin-top: 10px; font-size: 18px;"><strong>Total Potential Waste: $${totalWaste.toFixed(2)}</strong></p></div>`;
+                alertDiv.innerHTML = html;
+            } else {
+                alertDiv.innerHTML = '<div class="alert-box alert-success">✓ No over-ordering detected!</div>';
+            }
+        }
+
+        function displayParLevels() {
+            let html = '<table><thead><tr><th>Item</th><th>Par Level</th><th>Last 3 Orders</th><th>Variance</th></tr></thead><tbody>';
+
+            for (const [code, data] of Object.entries(parLevels)) {
+                const varianceClass = data.variance === 'High' ? 'status-critical' : data.variance === 'Medium' ? 'status-low' : 'status-ok';
+                html += `<tr>
+                    <td><strong>${data.name}</strong> <span class="item-code">${code}</span></td>
+                    <td><strong>${data.parQty} ${data.unit}</strong></td>
+                    <td>${data.history.join(', ')}</td>
+                    <td><span class="status-badge ${varianceClass}">${data.variance}</span></td>
+                </tr>`;
+            }
+
+            html += '</tbody></table>';
+            html += '<p style="margin-top: 10px; font-size: 13px; color: #666;"><strong>High variance items</strong> need attention - inconsistent ordering may indicate waste or stock issues.</p>';
+            document.getElementById('parLevelsDisplay').innerHTML = html;
+        }
+
+        function saveCurrentOrder() {
+            if (Object.keys(currentOrder).length === 0) {
+                alert('No order to save!');
+                return;
+            }
+
+            const orderTotal = calculateOrderTotal();
+            const maxBudget = weeklySales * 0.32;
+
+            // Calculate savings vs average
+            const avgSpend = 2661;
+            const savings = avgSpend - orderTotal;
+            if (savings > 0) {
+                monthlySavings += savings;
+                localStorage.setItem('scootersMonthlySavings', monthlySavings);
+            }
+
+            orderHistory.push({
+                date: new Date().toISOString(),
+                items: {...currentOrder},
+                total: orderTotal,
+                budget: maxBudget,
+                savings: savings
+            });
+
+            localStorage.setItem('scootersOrders', JSON.stringify(orderHistory));
+            updateSmartOrderDisplay();
+            alert(`Order saved! Total: $${orderTotal.toFixed(2)}${savings > 0 ? `\nSavings: $${savings.toFixed(2)}` : ''}`);
+        }
+
+        function emailSmartOrder() {
+            if (Object.keys(currentOrder).length === 0) {
+                alert('Load suggested order first!');
+                return;
+            }
+
+            const orderTotal = calculateOrderTotal();
+            const maxBudget = weeklySales * 0.32;
+            const remaining = maxBudget - orderTotal;
+
+            let emailBody = `SCOOTERS COFFEE #2106 - SMART ORDER\nDate: ${new Date().toLocaleDateString()}\nAllen, Texas\n\n`;
+            emailBody += `BUDGET SUMMARY:\n${'='.repeat(70)}\n`;
+            emailBody += `Weekly Sales: $${weeklySales.toFixed(2)}\n`;
+            emailBody += `Max COGS Budget (32%): $${maxBudget.toFixed(2)}\n`;
+            emailBody += `This Order Total: $${orderTotal.toFixed(2)}\n`;
+            emailBody += `Remaining Budget: $${remaining.toFixed(2)}\n`;
+            emailBody += `Status: ${remaining >= 0 ? '✓ WITHIN BUDGET' : '⚠️ OVER BUDGET'}\n\n`;
+
+            emailBody += `ORDER DETAILS:\n${'='.repeat(70)}\n\n`;
+
+            for (const [code, data] of Object.entries(currentOrder)) {
+                if (data.quantity > 0) {
+                    const item = findItemByCode(code);
+                    const parData = parLevels[code];
+                    if (item && parData) {
+                        emailBody += `Code: ${code} - ${parData.name}\n`;
+                        emailBody += `  Quantity: ${data.quantity} ${parData.unit}\n`;
+                        emailBody += `  Cost: $${item.cost.toFixed(2)} each = $${(item.cost * data.quantity).toFixed(2)} total\n`;
+                        emailBody += `  Par Level: ${parData.parQty} (Variance: ${parData.variance})\n\n`;
+                    }
+                }
+            }
+
+            emailBody += `\n${'='.repeat(70)}\n`;
+            emailBody += `TOTAL ORDER: $${orderTotal.toFixed(2)}\n`;
+            emailBody += `\nGenerated by Smart Order Budget - https://newgardcg.github.io/scooters-inventory/`;
+
+            const recipients = [settings.storeEmail, settings.managerEmails].filter(e => e).join(',');
+            const mailtoLink = `mailto:${recipients}?subject=${encodeURIComponent('Smart Order - ' + new Date().toLocaleDateString())}&body=${encodeURIComponent(emailBody)}`;
             window.location.href = mailtoLink;
         }
 
@@ -918,7 +1284,7 @@
                 document.getElementById('fridayAlert').innerHTML = `
                     <div class="alert-box alert-success">
                         <h3>🎯 It's Friday! Time to Order</h3>
-                        <button onclick="switchView('orderSheet')" style="margin-top: 10px;">Go to Order Sheet →</button>
+                        <button onclick="switchView('smartOrder')" style="margin-top: 10px;">Go to Smart Order Budget →</button>
                     </div>
                 `;
             }
