@@ -110,6 +110,11 @@
         .milk-input { width: 100px; padding: 6px; margin: 5px; }
         .order-input { width: 80px; padding: 6px; }
 
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
         @media (max-width: 768px) {
             .content { padding: 15px; }
             table { font-size: 11px; }
@@ -186,8 +191,11 @@
                     </div>
                 </div>
 
+                <div id="countReminder"></div>
+                <div id="missedCountAlert"></div>
+
                 <div class="controls">
-                    <button class="large" onclick="switchView('dailyCount'); startDailyCount();">📋 Start Daily Count</button>
+                    <button class="large" onclick="switchView('dailyCount'); startInventoryCount();">📋 Start Inventory Count</button>
                     <button class="secondary" onclick="switchView('smartOrder')">🎯 Smart Order Budget</button>
                     <button class="secondary" onclick="switchView('orderSheet')">📧 Order Sheet</button>
                     <button class="secondary" onclick="switchView('cogsGap')">📊 COGS Gap</button>
@@ -196,11 +204,13 @@
                 <div id="inventoryContainer"></div>
             </div>
 
-            <!-- Daily Count -->
+            <!-- Inventory Count -->
             <div id="dailyCount" class="view">
-                <div style="max-width: 600px; margin: 0 auto; text-align: center;">
-                    <h2>Daily Inventory Count</h2>
-                    <p style="color: #666; margin: 10px 0 20px;">Count each item. Takes 3-5 minutes.</p>
+                <div style="max-width: 800px; margin: 0 auto;">
+                    <h2 style="text-align: center;">📋 Inventory Count</h2>
+                    <p style="color: #666; margin: 10px 0 20px; text-align: center;">Count twice weekly: Monday & Thursday nights. Takes 15-20 minutes.</p>
+
+                    <div id="countComparison" style="margin: 20px 0;"></div>
                     <div id="countContent"></div>
                 </div>
             </div>
@@ -673,6 +683,7 @@
 
         let countIndex = 0;
         let countItems = [];
+        let countHistory = []; // Stores Monday and Thursday count records
 
         // Load data
         function loadData() {
@@ -716,11 +727,17 @@
             if (savedSavings) {
                 monthlySavings = parseFloat(savedSavings);
             }
+            const savedCountHistory = localStorage.getItem('scootersCountHistory');
+            if (savedCountHistory) {
+                countHistory = JSON.parse(savedCountHistory);
+            }
             updateDisplay();
             updateCOGSDisplay();
             updateMenuDisplay();
             updateSmartOrderDisplay();
             checkFriday();
+            checkCountReminders();
+            checkMissedCounts();
         }
 
         function saveInventory() {
@@ -843,8 +860,9 @@
             saveInventory();
         }
 
-        // Daily Count
-        function startDailyCount() {
+        // Twice-Weekly Inventory Count
+        function startInventoryCount() {
+            displayCountComparison();
             countItems = [];
             for (const [category, items] of Object.entries(inventory)) {
                 items.forEach((item, index) => {
@@ -855,19 +873,61 @@
             showCountItem();
         }
 
+        function displayCountComparison() {
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const countType = (dayOfWeek === 1 || dayOfWeek === 4) ? (dayOfWeek === 1 ? 'Monday' : 'Thursday') : 'Inventory';
+
+            // Find last count of this type
+            const lastCount = countHistory.filter(c => c.countType === countType).sort((a, b) => b.timestamp - a.timestamp)[0];
+
+            const compDiv = document.getElementById('countComparison');
+            if (!lastCount) {
+                compDiv.innerHTML = `<div class="alert-box alert-success">
+                    <h3>📋 ${countType} Count</h3>
+                    <p>Starting your ${countType} inventory count. Takes 15-20 minutes.</p>
+                </div>`;
+                return;
+            }
+
+            // Calculate what changed since last count
+            const lastDate = new Date(lastCount.timestamp);
+            const daysAgo = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+
+            compDiv.innerHTML = `<div class="alert-box alert-warning">
+                <h3>📊 Comparison to Last ${countType} Count</h3>
+                <p style="margin: 10px 0;">Last count was ${daysAgo} days ago (${lastDate.toLocaleDateString()})</p>
+                <p style="font-size: 13px; color: #856404;">You'll see how much was used since then after completing this count.</p>
+            </div>`;
+        }
+
         function showCountItem() {
             const content = document.getElementById('countContent');
             if (countIndex >= countItems.length) {
-                finishDailyCount();
+                finishInventoryCount();
                 return;
             }
 
             const item = countItems[countIndex];
+
+            // Find last count for this item
+            let lastCountValue = '';
+            if (countHistory.length > 0) {
+                const lastCount = countHistory[countHistory.length - 1];
+                if (lastCount.inventory && lastCount.inventory[item.category]) {
+                    const lastItem = lastCount.inventory[item.category][item.index];
+                    if (lastItem) {
+                        lastCountValue = `<div style="color: #999; font-size: 14px; margin-top: 10px;">Last count: ${lastItem.quantity} ${item.unit}</div>`;
+                    }
+                }
+            }
+
             content.innerHTML = `
                 <div style="background: #f8f9fa; padding: 40px; border-radius: 12px; margin: 30px 0;">
                     <div style="color: #666; margin-bottom: 20px;">Item ${countIndex + 1} of ${countItems.length}</div>
                     <h2 style="color: #667eea; font-size: 28px; margin-bottom: 10px;">${item.name}</h2>
                     <p style="color: #999; font-size: 14px; margin-bottom: 20px;">Code: ${item.itemCode} | Unit: ${item.unit}</p>
+                    ${lastCountValue}
                     <input type="number" id="countInput" style="font-size: 42px; text-align: center; padding: 20px; margin: 20px 0; border: 3px solid #667eea; border-radius: 8px; width: 100%;" placeholder="0" autofocus>
                     <button class="large" style="width: 100%; margin-top: 10px;" onclick="saveCountAndNext()">Next →</button>
                 </div>
@@ -886,15 +946,155 @@
             showCountItem();
         }
 
-        function finishDailyCount() {
+        function finishInventoryCount() {
             saveInventory();
+
+            // Save count to history
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const countType = (dayOfWeek === 1) ? 'Monday' : (dayOfWeek === 4) ? 'Thursday' : 'Other';
+
+            // Calculate usage since last count
+            let usageSummary = '';
+            if (countHistory.length > 0) {
+                const lastCount = countHistory[countHistory.length - 1];
+                const usageItems = [];
+
+                for (const [category, items] of Object.entries(inventory)) {
+                    if (lastCount.inventory[category]) {
+                        items.forEach((item, index) => {
+                            const lastQty = lastCount.inventory[category][index]?.quantity || 0;
+                            const currentQty = item.quantity;
+                            const used = lastQty - currentQty;
+                            if (Math.abs(used) > 0.1) {
+                                usageItems.push({
+                                    name: item.name,
+                                    used: used,
+                                    unit: item.unit
+                                });
+                            }
+                        });
+                    }
+                }
+
+                if (usageItems.length > 0) {
+                    usageSummary = '<h4 style="margin-top: 20px;">Usage Since Last Count:</h4><div style="max-height: 300px; overflow-y: auto;"><table style="margin-top: 10px;"><thead><tr><th>Item</th><th>Used</th></tr></thead><tbody>';
+                    usageItems.slice(0, 20).forEach(item => {
+                        const usedText = item.used > 0 ? `${item.used.toFixed(1)} ${item.unit}` : `Added ${Math.abs(item.used).toFixed(1)} ${item.unit}`;
+                        usageSummary += `<tr><td>${item.name}</td><td>${usedText}</td></tr>`;
+                    });
+                    usageSummary += '</tbody></table></div>';
+                }
+            }
+
+            countHistory.push({
+                timestamp: Date.now(),
+                countType: countType,
+                date: today.toISOString(),
+                inventory: JSON.parse(JSON.stringify(inventory))
+            });
+
+            localStorage.setItem('scootersCountHistory', JSON.stringify(countHistory));
+
             document.getElementById('countContent').innerHTML = `
                 <div class="alert-box alert-success">
-                    <h3>✓ Count Complete!</h3>
+                    <h3>✓ ${countType} Count Complete!</h3>
                     <p style="margin: 10px 0;">Inventory has been updated and saved.</p>
+                    ${usageSummary}
                     <button class="large" onclick="switchView('dashboard')" style="margin-top: 10px;">Back to Dashboard</button>
                 </div>
             `;
+        }
+
+        // Check for count reminders (Monday & Thursday at 8pm)
+        function checkCountReminders() {
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const hour = now.getHours();
+            const reminderDiv = document.getElementById('countReminder');
+
+            // Monday (1) or Thursday (4) after 8pm
+            if ((dayOfWeek === 1 || dayOfWeek === 4) && hour >= 20) {
+                const countType = dayOfWeek === 1 ? 'Monday' : 'Thursday';
+
+                // Check if already counted today
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const countedToday = countHistory.some(c => {
+                    const countDate = new Date(c.timestamp);
+                    countDate.setHours(0, 0, 0, 0);
+                    return countDate.getTime() === today.getTime() && c.countType === countType;
+                });
+
+                if (!countedToday) {
+                    reminderDiv.innerHTML = `<div class="alert-box alert-warning" style="animation: pulse 2s infinite;">
+                        <h3>⏰ ${countType} Inventory Count Due Tonight!</h3>
+                        <p style="margin: 10px 0;">Inventory count should be completed before close tonight. Takes 15-20 minutes.</p>
+                        <button class="large" onclick="switchView('dailyCount'); startInventoryCount();" style="margin-top: 10px;">Start Count Now →</button>
+                    </div>`;
+                } else {
+                    reminderDiv.innerHTML = `<div class="alert-box alert-success">
+                        <h3>✓ ${countType} Count Completed</h3>
+                        <p>Thank you! ${countType} inventory count is done.</p>
+                    </div>`;
+                }
+            } else {
+                reminderDiv.innerHTML = '';
+            }
+        }
+
+        // Check for missed counts
+        function checkMissedCounts() {
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const alertDiv = document.getElementById('missedCountAlert');
+
+            // Tuesday - check if Monday count was done
+            if (dayOfWeek === 2) {
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                yesterday.setHours(0, 0, 0, 0);
+
+                const mondayCountDone = countHistory.some(c => {
+                    const countDate = new Date(c.timestamp);
+                    countDate.setHours(0, 0, 0, 0);
+                    return countDate.getTime() === yesterday.getTime() && c.countType === 'Monday';
+                });
+
+                if (!mondayCountDone) {
+                    alertDiv.innerHTML = `<div class="alert-box alert-danger">
+                        <h3>⚠️ Missed Monday Count!</h3>
+                        <p style="margin: 10px 0;">Monday inventory count was not completed. Please count as soon as possible.</p>
+                        <button class="large" onclick="switchView('dailyCount'); startInventoryCount();" style="margin-top: 10px;">Start Count Now →</button>
+                    </div>`;
+                    return;
+                }
+            }
+
+            // Friday - check if Thursday count was done (CRITICAL - needed for ordering)
+            if (dayOfWeek === 5) {
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                yesterday.setHours(0, 0, 0, 0);
+
+                const thursdayCountDone = countHistory.some(c => {
+                    const countDate = new Date(c.timestamp);
+                    countDate.setHours(0, 0, 0, 0);
+                    return countDate.getTime() === yesterday.getTime() && c.countType === 'Thursday';
+                });
+
+                if (!thursdayCountDone) {
+                    alertDiv.innerHTML = `<div class="alert-box alert-danger">
+                        <h3>🔴 CRITICAL: Thursday Count Missing!</h3>
+                        <p style="margin: 10px 0; font-size: 16px;"><strong>Cannot generate Friday order without Thursday count!</strong></p>
+                        <p>Complete inventory count immediately to place today's order.</p>
+                        <button class="large danger" onclick="switchView('dailyCount'); startInventoryCount();" style="margin-top: 10px;">START COUNT NOW →</button>
+                    </div>`;
+                    return;
+                }
+            }
+
+            alertDiv.innerHTML = '';
         }
 
         // Order Sheet
@@ -902,6 +1102,16 @@
             const content = document.getElementById('orderSheetContent');
             const krogerItems = [];
             const harvestItems = [];
+
+            // Check if Thursday count was done
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            yesterday.setHours(0, 0, 0, 0);
+            const thursdayCountDone = countHistory.some(c => {
+                const countDate = new Date(c.timestamp);
+                countDate.setHours(0, 0, 0, 0);
+                return countDate.getTime() === yesterday.getTime() && c.countType === 'Thursday';
+            });
 
             for (const [category, items] of Object.entries(inventory)) {
                 items.forEach(item => {
@@ -929,6 +1139,21 @@
             }
 
             let html = '';
+
+            // Thursday Count Status Header
+            const lastThursdayCount = countHistory.filter(c => c.countType === 'Thursday').sort((a, b) => b.timestamp - a.timestamp)[0];
+            if (thursdayCountDone && lastThursdayCount) {
+                const thursdayDate = new Date(lastThursdayCount.timestamp).toLocaleDateString();
+                html += `<div class="alert-box" style="background: #d4edda; border-color: #c3e6cb; color: #155724; margin-bottom: 20px;">
+                    <strong>✅ Order Based on Thursday Night Count</strong><br>
+                    <span style="font-size: 14px;">Count completed: ${thursdayDate} at ${new Date(lastThursdayCount.timestamp).toLocaleTimeString()}</span>
+                </div>`;
+            } else {
+                html += `<div class="alert-box alert-danger" style="margin-bottom: 20px;">
+                    <strong>⚠️ Thursday Count Not Found</strong><br>
+                    <span style="font-size: 14px;">Order quantities may be inaccurate. Please complete Thursday night count before ordering.</span>
+                </div>`;
+            }
 
             // Kroger Order Section
             if (krogerItems.length > 0) {
@@ -988,6 +1213,16 @@
             const krogerItems = [];
             const harvestItems = [];
 
+            // Check if Thursday count was done
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            yesterday.setHours(0, 0, 0, 0);
+            const thursdayCountDone = countHistory.some(c => {
+                const countDate = new Date(c.timestamp);
+                countDate.setHours(0, 0, 0, 0);
+                return countDate.getTime() === yesterday.getTime() && c.countType === 'Thursday';
+            });
+
             for (const [category, items] of Object.entries(inventory)) {
                 items.forEach(item => {
                     if (item.quantity <= item.minLevel) {
@@ -1012,6 +1247,16 @@
             }
 
             let emailBody = `SCOOTERS COFFEE #2106 - WEEKLY ORDER\nDate: ${new Date().toLocaleDateString()}\nAllen, Texas\n\n`;
+
+            // Thursday Count Status
+            const lastThursdayCount = countHistory.filter(c => c.countType === 'Thursday').sort((a, b) => b.timestamp - a.timestamp)[0];
+            if (thursdayCountDone && lastThursdayCount) {
+                const thursdayDate = new Date(lastThursdayCount.timestamp).toLocaleDateString();
+                const thursdayTime = new Date(lastThursdayCount.timestamp).toLocaleTimeString();
+                emailBody += `✅ Based on Thursday Night Count\n   Completed: ${thursdayDate} at ${thursdayTime}\n\n`;
+            } else {
+                emailBody += `⚠️ WARNING: Thursday count not completed!\n   Order quantities may be inaccurate.\n\n`;
+            }
 
             // Kroger Order Section
             if (krogerItems.length > 0) {
