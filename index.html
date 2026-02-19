@@ -225,6 +225,70 @@
                     <button class="secondary" onclick="switchView('smartOrder')">🎯 Smart Order Budget</button>
                     <button class="secondary" onclick="switchView('orderSheet')">📧 Order Sheet</button>
                     <button class="secondary" onclick="switchView('cogsGap')">📊 COGS Gap</button>
+                    <button class="success" onclick="showAddItemForm()" style="margin-left: auto;">➕ Add New Item</button>
+                </div>
+
+                <!-- Add New Item Form (Hidden by default) -->
+                <div id="addItemForm" style="display: none; background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
+                    <h3 style="color: #333; margin-bottom: 15px;">➕ Request New Inventory Item</h3>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Fill out this form to request a new item. The owner will review and approve it.</p>
+
+                    <div class="form-group">
+                        <label>Item Name:</label>
+                        <input type="text" id="newItemName" placeholder="e.g., Pumpkin Spice Syrup 1L">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Item Code (if known):</label>
+                        <input type="text" id="newItemCode" placeholder="e.g., 102XXX (optional)">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Supplier:</label>
+                        <select id="newItemSupplier">
+                            <option value="Harvest">Harvest Roasting</option>
+                            <option value="Kroger">Kroger</option>
+                            <option value="Other">Other (specify in notes)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Estimated Cost:</label>
+                        <input type="number" id="newItemCost" placeholder="e.g., 8.50" step="0.01">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Category:</label>
+                        <select id="newItemCategory">
+                            <option value="Beverages">Beverages</option>
+                            <option value="Coffee">Coffee</option>
+                            <option value="Cups & Lids">Cups & Lids</option>
+                            <option value="Dairy & Cream">Dairy & Cream</option>
+                            <option value="Syrups & Sauces">Syrups & Sauces</option>
+                            <option value="Food">Food</option>
+                            <option value="Supplies">Supplies</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Unit Type:</label>
+                        <select id="newItemUnit">
+                            <option value="case">Case</option>
+                            <option value="each">Each</option>
+                            <option value="gallon">Gallon</option>
+                            <option value="lb">Pound</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Notes (optional):</label>
+                        <textarea id="newItemNotes" rows="3" placeholder="e.g., Need for seasonal menu, currently ordering from..."></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="success" onclick="submitNewItem()">📤 Submit Request</button>
+                        <button class="secondary" onclick="cancelAddItem()">Cancel</button>
+                    </div>
                 </div>
 
                 <div id="inventoryContainer"></div>
@@ -510,6 +574,15 @@
 
                 <button onclick="saveSettings()">💾 Save Settings</button>
 
+                <!-- Pending Items Approval Section -->
+                <div id="pendingItemsSection" style="margin-top: 30px; display: none;">
+                    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; border-radius: 8px;">
+                        <h3 style="color: #856404; margin-bottom: 15px;">⏳ Pending Item Requests</h3>
+                        <p style="color: #856404; font-size: 14px; margin-bottom: 15px;">Review and approve new items requested by managers.</p>
+                        <div id="pendingItemsList"></div>
+                    </div>
+                </div>
+
                 <div class="alert-box alert-success" style="margin-top: 30px;">
                     <h3>📱 Share This App</h3>
                     <p style="margin-bottom: 10px;">URL: <strong>https://newgardcg.github.io/scooters-inventory/</strong></p>
@@ -534,7 +607,7 @@
                 { name: "Red Bull Regular 24ct", itemCode: "100792", unit: "case", cost: 31.90, minLevel: 2, quantity: 0 },
                 { name: "Red Bull Tropical 24ct", itemCode: "100793", unit: "case", cost: 31.90, minLevel: 1, quantity: 0 },
                 { name: "Red Bull Sugar Free 24ct", itemCode: "100794", unit: "case", cost: 31.90, minLevel: 1, quantity: 0 },
-                { name: "Red Bull Iced Sugar Free 24ct", itemCode: "102242", unit: "case", cost: 33.55, minLevel: 1, quantity: 0 },
+                { name: "Red Bull Iced Vanilla Berry 24ct", itemCode: "102242", unit: "case", cost: 33.55, minLevel: 1, quantity: 0 },
                 { name: "Sparkling Water 12ct", itemCode: "102232", unit: "case", cost: 4.80, minLevel: 2, quantity: 0 },
                 { name: "Bottled Water 24ct", itemCode: "100283", unit: "case", cost: 11.50, minLevel: 3, quantity: 0 },
                 { name: "Lemonade 12ct", itemCode: "100619", unit: "case", cost: 46.10, minLevel: 1, quantity: 0 },
@@ -552,14 +625,32 @@
                 { name: "Dark Roast Blend Whole Beans 3lb", itemCode: "100526", unit: "each", cost: 35.95, minLevel: 2, quantity: 0 }
             ],
             "Cups & Lids": [
-                { name: "Red Straw 1800ct", itemCode: "100013", unit: "case", cost: 25.00, minLevel: 2, quantity: 0 },
-                { name: "XL Cold Cup 32oz/270ct", itemCode: "100169", unit: "case", cost: 70.00, minLevel: 1, quantity: 0 },
-                { name: "Large Smiley Cold Cup 24oz/600ct", itemCode: "100082", unit: "case", cost: 125.00, minLevel: 1, quantity: 0 },
+                // COLD CUPS
+                { name: "Kid's Cold Cup 12oz/1000ct", itemCode: "100214", unit: "case", cost: 82.00, minLevel: 1, quantity: 0 },
+                { name: "Small Smiley Cold Cup 16oz/700ct", itemCode: "101621", unit: "case", cost: 81.00, minLevel: 1, quantity: 0 },
                 { name: "Medium Smiley Cold Cup 20oz/600ct", itemCode: "101622", unit: "case", cost: 77.00, minLevel: 1, quantity: 0 },
+                { name: "Large Smiley Cold Cup 24oz/600ct", itemCode: "100082", unit: "case", cost: 125.00, minLevel: 1, quantity: 0 },
+                { name: "XL Cold Cup 32oz/270ct", itemCode: "100169", unit: "case", cost: 70.00, minLevel: 1, quantity: 0 },
+                // HOT CUPS
+                { name: "Sample Cup Hot 4oz/48ct", itemCode: "100192", unit: "case", cost: 3.75, minLevel: 1, quantity: 0 },
+                { name: "Small Smiley Hot Cup 12oz/600ct", itemCode: "100799", unit: "case", cost: 76.00, minLevel: 1, quantity: 0 },
+                { name: "Medium Smiley Hot Cup 16oz/384ct", itemCode: "100195", unit: "case", cost: 49.50, minLevel: 1, quantity: 0 },
                 { name: "Large Smiley Hot Cup 20oz/312ct", itemCode: "100196", unit: "case", cost: 46.75, minLevel: 1, quantity: 0 },
+                { name: "XL Hot Cup 24oz/280ct", itemCode: "100177", unit: "case", cost: 60.00, minLevel: 1, quantity: 0 },
+                // LIDS
                 { name: "Red Lid 1000ct", itemCode: "100193", unit: "case", cost: 35.78, minLevel: 2, quantity: 0 },
                 { name: "Sip Lid 1080ct", itemCode: "100281", unit: "case", cost: 44.75, minLevel: 2, quantity: 0 },
-                { name: "Flat Lid 1000ct", itemCode: "100357", unit: "case", cost: 34.00, minLevel: 2, quantity: 0 }
+                { name: "Flat Lid 1000ct", itemCode: "100357", unit: "case", cost: 34.00, minLevel: 2, quantity: 0 },
+                { name: "Dome Lid 1000ct", itemCode: "100358", unit: "case", cost: 50.50, minLevel: 2, quantity: 0 },
+                { name: "XL Dome Lid 975ct", itemCode: "100248", unit: "case", cost: 65.00, minLevel: 1, quantity: 0 },
+                { name: "XL Flat Lid 1000ct", itemCode: "100047", unit: "case", cost: 65.00, minLevel: 1, quantity: 0 },
+                { name: "XL Sip Lid 900ct", itemCode: "100344", unit: "case", cost: 65.00, minLevel: 1, quantity: 0 },
+                // STRAWS
+                { name: "Red Straw 1800ct", itemCode: "100013", unit: "case", cost: 25.00, minLevel: 2, quantity: 0 },
+                { name: "Kid's Flex Straw 400ct", itemCode: "101627", unit: "case", cost: 5.00, minLevel: 1, quantity: 0 },
+                { name: "Sample Straw 100ct", itemCode: "100465", unit: "case", cost: 3.72, minLevel: 1, quantity: 0 },
+                { name: "Scooter's Drink Stopper 4000ct", itemCode: "100011", unit: "case", cost: 68.00, minLevel: 1, quantity: 0 },
+                { name: "Stir Straw 10,000ct", itemCode: "101973", unit: "case", cost: 24.00, minLevel: 1, quantity: 0 }
             ],
             "Dairy & Cream": [
                 { name: "2% Reduced Fat Milk 1gal (Kroger)", itemCode: "KRO-2PCT", unit: "gallon", cost: 2.59, minLevel: 25, quantity: 0, supplier: "Kroger" },
@@ -721,6 +812,55 @@
         let countIndex = 0;
         let countItems = [];
         let countHistory = []; // Stores Monday and Thursday count records
+        let pendingItems = []; // Items awaiting approval
+
+        // ============================================================================
+        // UNIT CONVERSION SYSTEM - Count individually, order by case
+        // ============================================================================
+
+        // Extract units per case from item name (e.g., "Smoothie 6ct" => 6)
+        function getUnitsPerCase(itemName) {
+            const match = itemName.match(/(\d+)ct/i);
+            return match ? parseInt(match[1]) : 1;
+        }
+
+        // Determine if item should be counted individually
+        function shouldCountIndividually(item) {
+            const individualCategories = ['Food', 'Beverages', 'Syrups & Sauces'];
+            const caseCategories = ['Cups & Lids', 'Coffee'];
+
+            // Milk is always counted individually (gallons)
+            if (item.supplier === 'Kroger' || item.name.includes('Milk')) {
+                return true;
+            }
+
+            // Food items with "ct" in name (smoothies, burritos, etc.) count individually
+            if (item.name.match(/\d+ct/i) && (individualCategories.some(cat => item.category === cat))) {
+                return true;
+            }
+
+            return false;
+        }
+
+        // Convert individual units to cases
+        function individualToCases(individualCount, unitsPerCase) {
+            return individualCount / unitsPerCase;
+        }
+
+        // Convert cases to individual units
+        function casesToIndividual(caseCount, unitsPerCase) {
+            return caseCount * unitsPerCase;
+        }
+
+        // Get display string for inventory count
+        function getCountDisplay(item) {
+            if (shouldCountIndividually(item)) {
+                const unitsPerCase = getUnitsPerCase(item.name);
+                const cases = individualToCases(item.quantity, unitsPerCase);
+                return `${item.quantity} units (${cases.toFixed(1)} cases)`;
+            }
+            return `${item.quantity} ${item.unit}`;
+        }
 
         // ============================================================================
         // FIREBASE REAL-TIME SYNC - All managers see same data!
@@ -857,6 +997,15 @@
                 }
             });
 
+            // Real-time listener for pending items
+            database.ref('pendingItems').on('value', (snapshot) => {
+                const savedPending = snapshot.val();
+                if (savedPending) {
+                    pendingItems = savedPending;
+                    displayPendingItems();
+                }
+            });
+
             // Real-time listener for last updated metadata
             database.ref('metadata/lastUpdated').on('value', (snapshot) => {
                 const metadata = snapshot.val();
@@ -892,6 +1041,157 @@
             alert('Settings saved!');
         }
 
+        // ============================================================================
+        // ADD NEW ITEM SYSTEM
+        // ============================================================================
+
+        function showAddItemForm() {
+            document.getElementById('addItemForm').style.display = 'block';
+            document.getElementById('addItemForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelAddItem() {
+            document.getElementById('addItemForm').style.display = 'none';
+            // Clear form
+            document.getElementById('newItemName').value = '';
+            document.getElementById('newItemCode').value = '';
+            document.getElementById('newItemCost').value = '';
+            document.getElementById('newItemNotes').value = '';
+        }
+
+        function submitNewItem() {
+            const managerName = getManagerName();
+            const itemName = document.getElementById('newItemName').value.trim();
+            const itemCode = document.getElementById('newItemCode').value.trim() || 'PENDING';
+            const supplier = document.getElementById('newItemSupplier').value;
+            const cost = parseFloat(document.getElementById('newItemCost').value) || 0;
+            const category = document.getElementById('newItemCategory').value;
+            const unit = document.getElementById('newItemUnit').value;
+            const notes = document.getElementById('newItemNotes').value.trim();
+
+            if (!itemName || cost <= 0) {
+                alert('Please enter item name and cost!');
+                return;
+            }
+
+            const newItem = {
+                name: itemName,
+                itemCode: itemCode,
+                supplier: supplier,
+                cost: cost,
+                category: category,
+                unit: unit,
+                notes: notes,
+                requestedBy: managerName,
+                timestamp: Date.now(),
+                status: 'PENDING'
+            };
+
+            // Add to pending items array
+            pendingItems.push(newItem);
+            saveToFirebase('pendingItems', pendingItems);
+
+            // Send email notification to owner
+            const emailSubject = `New Inventory Item Request - ${itemName}`;
+            const emailBody = `NEW INVENTORY ITEM REQUEST\n\nRequested by: ${managerName}\nDate: ${new Date().toLocaleDateString()}\n\n` +
+                `Item Name: ${itemName}\nItem Code: ${itemCode}\nSupplier: ${supplier}\nCategory: ${category}\n` +
+                `Unit: ${unit}\nEstimated Cost: $${cost.toFixed(2)}\n\nNotes: ${notes}\n\n` +
+                `Review and approve at: https://newgardcg.github.io/scooters-inventory/ → Settings tab`;
+
+            window.open(`mailto:newgardcg@gmail.com?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`);
+
+            alert(`✅ Item request submitted!\n\nAn email has been opened to notify the owner.\nPlease click "Send" to complete the request.`);
+            cancelAddItem();
+        }
+
+        // Load and display pending items in Settings
+        function displayPendingItems() {
+            const section = document.getElementById('pendingItemsSection');
+            const list = document.getElementById('pendingItemsList');
+
+            if (!pendingItems || pendingItems.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            let html = '';
+
+            pendingItems.forEach((item, index) => {
+                html += `
+                    <div style="background: white; padding: 15px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffc107;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <h4 style="color: #333; margin-bottom: 5px;">${item.name}</h4>
+                                <p style="font-size: 13px; color: #666; margin: 3px 0;">
+                                    <strong>Code:</strong> ${item.itemCode} |
+                                    <strong>Supplier:</strong> ${item.supplier} |
+                                    <strong>Cost:</strong> $${item.cost.toFixed(2)} |
+                                    <strong>Category:</strong> ${item.category}
+                                </p>
+                                <p style="font-size: 13px; color: #666; margin: 3px 0;">
+                                    <strong>Requested by:</strong> ${item.requestedBy} on ${new Date(item.timestamp).toLocaleDateString()}
+                                </p>
+                                ${item.notes ? `<p style="font-size: 12px; color: #999; margin-top: 5px; font-style: italic;">${item.notes}</p>` : ''}
+                            </div>
+                            <div style="display: flex; gap: 5px;">
+                                <button onclick="approveItem(${index})" class="success" style="padding: 6px 12px; font-size: 12px;">✓ Approve</button>
+                                <button onclick="rejectItem(${index})" class="danger" style="padding: 6px 12px; font-size: 12px;">✗ Reject</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            list.innerHTML = html;
+        }
+
+        function approveItem(index) {
+            const item = pendingItems[index];
+            if (!confirm(`Approve "${item.name}"?\n\nThis will add it to the ${item.category} category.`)) {
+                return;
+            }
+
+            // Add to inventory
+            const newItem = {
+                name: item.name,
+                itemCode: item.itemCode,
+                unit: item.unit,
+                cost: item.cost,
+                minLevel: 1,
+                quantity: 0,
+                supplier: item.supplier
+            };
+
+            if (!inventory[item.category]) {
+                inventory[item.category] = [];
+            }
+            inventory[item.category].push(newItem);
+
+            // Remove from pending
+            pendingItems.splice(index, 1);
+
+            // Save both
+            saveInventory();
+            saveToFirebase('pendingItems', pendingItems);
+
+            alert(`✅ "${item.name}" has been added to inventory!`);
+            displayPendingItems();
+        }
+
+        function rejectItem(index) {
+            const item = pendingItems[index];
+            if (!confirm(`Reject "${item.name}"?\n\nThis will remove the request.`)) {
+                return;
+            }
+
+            pendingItems.splice(index, 1);
+            saveToFirebase('pendingItems', pendingItems);
+
+            alert(`Item request rejected and removed.`);
+            displayPendingItems();
+        }
+
         function switchView(viewName) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -906,6 +1206,7 @@
                 if (currentName) {
                     document.getElementById('managerName').value = currentName;
                 }
+                displayPendingItems();
             }
         }
 
@@ -923,6 +1224,9 @@
                 const tbody = table.querySelector('tbody');
 
                 items.forEach((item, index) => {
+                    // Add category to item for conversion logic
+                    item.category = category;
+
                     const itemValue = item.quantity * item.cost;
                     totalValue += itemValue;
                     let status = 'OK', statusClass = 'status-ok', rowClass = '';
@@ -932,12 +1236,23 @@
                         status = 'LOW'; statusClass = 'status-low'; rowClass = 'low-stock'; lowStockCount++;
                     }
 
+                    // Check if this item should show conversion
+                    let quantityDisplay = item.quantity;
+                    let conversionHint = '';
+                    if (shouldCountIndividually(item)) {
+                        const unitsPerCase = getUnitsPerCase(item.name);
+                        if (unitsPerCase > 1) {
+                            const cases = individualToCases(item.quantity, unitsPerCase);
+                            conversionHint = `<div style="font-size: 11px; color: #666; margin-top: 2px;">≈ ${cases.toFixed(1)} cases</div>`;
+                        }
+                    }
+
                     const row = document.createElement('tr');
                     row.className = rowClass;
                     row.innerHTML = `
                         <td><strong>${item.name}</strong></td>
                         <td><span class="item-code">${item.itemCode}</span></td>
-                        <td><input type="number" value="${item.quantity}" onchange="updateQuantity('${category}', ${index}, this.value)" style="width: 70px; padding: 4px;"></td>
+                        <td><input type="number" value="${item.quantity}" onchange="updateQuantity('${category}', ${index}, this.value)" style="width: 70px; padding: 4px;">${conversionHint}</td>
                         <td>${item.unit}</td>
                         <td>$${item.cost.toFixed(2)}</td>
                         <td><strong>$${itemValue.toFixed(2)}</strong></td>
