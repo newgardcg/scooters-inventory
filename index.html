@@ -124,6 +124,27 @@
             .order-input, .milk-input { width: 60px; }
         }
     </style>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDl63k-rzjAE7rRFFGyu2PuBGCqPfFlDOA",
+            authDomain: "scooters-inventory.firebaseapp.com",
+            databaseURL: "https://scooters-inventory-default-rtdb.firebaseio.com",
+            projectId: "scooters-inventory",
+            storageBucket: "scooters-inventory.firebasestorage.app",
+            messagingSenderId: "863956546619",
+            appId: "1:863956546619:web:c4b8cd532c33f6d722d81e",
+            measurementId: "G-P3ZTZ8ZY19"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+    </script>
 </head>
 <body>
     <div class="container">
@@ -143,6 +164,11 @@
         </div>
 
         <div class="content">
+            <!-- Last Updated Banner -->
+            <div id="lastUpdatedBanner" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 12px 20px; border-radius: 6px; margin-bottom: 20px; display: none; text-align: center; font-size: 14px; font-weight: 600;">
+                <span id="lastUpdatedText">Loading...</span>
+            </div>
+
             <!-- Dashboard -->
             <div id="dashboard" class="view active">
                 <div class="summary-cards">
@@ -461,6 +487,17 @@
             <div id="settings" class="view">
                 <h2>⚙️ Settings</h2>
 
+                <div class="alert-box" style="background: #e7f3ff; border-left: 4px solid #0c5460; color: #004085; margin-bottom: 20px;">
+                    <h3 style="color: #004085;">☁️ Real-Time Cloud Sync Enabled</h3>
+                    <p style="margin: 5px 0; font-size: 14px;">All managers see the same inventory data instantly. Changes sync across all devices automatically!</p>
+                </div>
+
+                <div class="form-group">
+                    <label>Your Name (for tracking updates):</label>
+                    <input type="text" id="managerName" placeholder="Enter first name or initials">
+                    <button onclick="changeManagerName()" style="margin-top: 5px; padding: 8px 16px; font-size: 13px;">Update Name</button>
+                </div>
+
                 <div class="form-group">
                     <label>Store Email:</label>
                     <input type="email" id="storeEmail" value="store2106@gmail.com">
@@ -685,52 +722,150 @@
         let countItems = [];
         let countHistory = []; // Stores Monday and Thursday count records
 
-        // Load data
+        // ============================================================================
+        // FIREBASE REAL-TIME SYNC - All managers see same data!
+        // ============================================================================
+
+        // Get or set manager name (stored locally for identification)
+        function getManagerName() {
+            let managerName = localStorage.getItem('scootersManagerName');
+            if (!managerName) {
+                managerName = prompt('Enter your name (first name or initials):\n\nThis helps track who updated the inventory.') || 'Manager';
+                localStorage.setItem('scootersManagerName', managerName);
+            }
+            return managerName;
+        }
+
+        // Update "Last Updated" banner
+        function updateLastUpdatedBanner(managerName, timestamp) {
+            const banner = document.getElementById('lastUpdatedBanner');
+            const text = document.getElementById('lastUpdatedText');
+            if (managerName && timestamp) {
+                const date = new Date(timestamp);
+                const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                text.textContent = `✅ Last updated by ${managerName} at ${timeStr} on ${dateStr}`;
+                banner.style.display = 'block';
+            }
+        }
+
+        // Save inventory to Firebase with metadata
+        function saveInventory() {
+            const managerName = getManagerName();
+            const timestamp = Date.now();
+
+            database.ref('inventory').set(inventory);
+            database.ref('metadata/lastUpdated').set({
+                managerName: managerName,
+                timestamp: timestamp
+            });
+
+            updateDisplay();
+        }
+
+        // Save specific data to Firebase
+        function saveToFirebase(path, data) {
+            const managerName = getManagerName();
+            const timestamp = Date.now();
+
+            database.ref(path).set(data);
+            database.ref('metadata/lastUpdated').set({
+                managerName: managerName,
+                timestamp: timestamp
+            });
+        }
+
+        // Load data from Firebase with real-time sync
         function loadData() {
-            const saved = localStorage.getItem('scootersInventory');
-            if (saved) {
-                const savedData = JSON.parse(saved);
-                for (const [category, items] of Object.entries(inventory)) {
-                    if (savedData[category]) {
-                        items.forEach((item, index) => {
-                            if (savedData[category][index]) {
-                                item.quantity = savedData[category][index].quantity || 0;
-                            }
-                        });
+            // Real-time listener for inventory data
+            database.ref('inventory').on('value', (snapshot) => {
+                const savedData = snapshot.val();
+                if (savedData) {
+                    for (const [category, items] of Object.entries(inventory)) {
+                        if (savedData[category]) {
+                            items.forEach((item, index) => {
+                                if (savedData[category][index]) {
+                                    item.quantity = savedData[category][index].quantity || 0;
+                                }
+                            });
+                        }
                     }
+                    updateDisplay();
                 }
-            }
-            const savedSettings = localStorage.getItem('scootersSettings');
-            if (savedSettings) {
-                settings = JSON.parse(savedSettings);
-                document.getElementById('storeEmail').value = settings.storeEmail || '';
-                document.getElementById('managerEmails').value = settings.managerEmails || '';
-            }
-            const savedCOGS = localStorage.getItem('scootersCOGS');
-            if (savedCOGS) {
-                cogsData = JSON.parse(savedCOGS);
-            }
-            const savedOrders = localStorage.getItem('scootersOrders');
-            if (savedOrders) {
-                orderHistory = JSON.parse(savedOrders);
-            }
-            const savedMilk = localStorage.getItem('scootersMilk');
-            if (savedMilk) {
-                milkOrders = JSON.parse(savedMilk);
-            }
-            const savedSales = localStorage.getItem('scootersWeeklySales');
-            if (savedSales) {
-                weeklySales = parseFloat(savedSales);
-                document.getElementById('weekSalesInput').value = weeklySales;
-            }
-            const savedSavings = localStorage.getItem('scootersMonthlySavings');
-            if (savedSavings) {
-                monthlySavings = parseFloat(savedSavings);
-            }
-            const savedCountHistory = localStorage.getItem('scootersCountHistory');
-            if (savedCountHistory) {
-                countHistory = JSON.parse(savedCountHistory);
-            }
+            });
+
+            // Real-time listener for settings
+            database.ref('settings').on('value', (snapshot) => {
+                const savedSettings = snapshot.val();
+                if (savedSettings) {
+                    settings = savedSettings;
+                    document.getElementById('storeEmail').value = settings.storeEmail || '';
+                    document.getElementById('managerEmails').value = settings.managerEmails || '';
+                }
+            });
+
+            // Real-time listener for COGS data
+            database.ref('cogsData').on('value', (snapshot) => {
+                const savedCOGS = snapshot.val();
+                if (savedCOGS) {
+                    cogsData = savedCOGS;
+                    updateCOGSDisplay();
+                }
+            });
+
+            // Real-time listener for order history
+            database.ref('orderHistory').on('value', (snapshot) => {
+                const savedOrders = snapshot.val();
+                if (savedOrders) {
+                    orderHistory = savedOrders;
+                    updateSmartOrderDisplay();
+                }
+            });
+
+            // Real-time listener for milk orders
+            database.ref('milkOrders').on('value', (snapshot) => {
+                const savedMilk = snapshot.val();
+                if (savedMilk) {
+                    milkOrders = savedMilk;
+                }
+            });
+
+            // Real-time listener for weekly sales
+            database.ref('weeklySales').on('value', (snapshot) => {
+                const savedSales = snapshot.val();
+                if (savedSales) {
+                    weeklySales = parseFloat(savedSales);
+                    document.getElementById('weekSalesInput').value = weeklySales;
+                }
+            });
+
+            // Real-time listener for monthly savings
+            database.ref('monthlySavings').on('value', (snapshot) => {
+                const savedSavings = snapshot.val();
+                if (savedSavings) {
+                    monthlySavings = parseFloat(savedSavings);
+                }
+            });
+
+            // Real-time listener for count history
+            database.ref('countHistory').on('value', (snapshot) => {
+                const savedCountHistory = snapshot.val();
+                if (savedCountHistory) {
+                    countHistory = savedCountHistory;
+                    checkCountReminders();
+                    checkMissedCounts();
+                }
+            });
+
+            // Real-time listener for last updated metadata
+            database.ref('metadata/lastUpdated').on('value', (snapshot) => {
+                const metadata = snapshot.val();
+                if (metadata) {
+                    updateLastUpdatedBanner(metadata.managerName, metadata.timestamp);
+                }
+            });
+
+            // Initial display updates
             updateDisplay();
             updateCOGSDisplay();
             updateMenuDisplay();
@@ -740,15 +875,20 @@
             checkMissedCounts();
         }
 
-        function saveInventory() {
-            localStorage.setItem('scootersInventory', JSON.stringify(inventory));
-            updateDisplay();
+        function changeManagerName() {
+            const newName = document.getElementById('managerName').value.trim();
+            if (newName) {
+                localStorage.setItem('scootersManagerName', newName);
+                alert(`Name updated to: ${newName}\n\nThis will show when you update inventory.`);
+            } else {
+                alert('Please enter a name!');
+            }
         }
 
         function saveSettings() {
             settings.storeEmail = document.getElementById('storeEmail').value;
             settings.managerEmails = document.getElementById('managerEmails').value;
-            localStorage.setItem('scootersSettings', JSON.stringify(settings));
+            saveToFirebase('settings', settings);
             alert('Settings saved!');
         }
 
@@ -761,6 +901,12 @@
             if (viewName === 'cogsGap') updateCOGSDisplay();
             if (viewName === 'menuProfit') updateMenuDisplay();
             if (viewName === 'smartOrder') updateSmartOrderDisplay();
+            if (viewName === 'settings') {
+                const currentName = localStorage.getItem('scootersManagerName');
+                if (currentName) {
+                    document.getElementById('managerName').value = currentName;
+                }
+            }
         }
 
         function updateDisplay() {
@@ -994,7 +1140,7 @@
                 inventory: JSON.parse(JSON.stringify(inventory))
             });
 
-            localStorage.setItem('scootersCountHistory', JSON.stringify(countHistory));
+            saveToFirebase('countHistory', countHistory);
 
             document.getElementById('countContent').innerHTML = `
                 <div class="alert-box alert-success">
@@ -1330,7 +1476,7 @@
                 timestamp: Date.now()
             });
 
-            localStorage.setItem('scootersMilk', JSON.stringify(milkOrders));
+            saveToFirebase('milkOrders', milkOrders);
 
             // Clear form
             document.getElementById('milkDate').value = '';
@@ -1436,7 +1582,7 @@
         // SMART ORDER BUDGET
         function setWeeklySales() {
             weeklySales = parseFloat(document.getElementById('weekSalesInput').value) || 8750;
-            localStorage.setItem('scootersWeeklySales', weeklySales);
+            saveToFirebase('weeklySales', weeklySales);
             updateSmartOrderDisplay();
         }
 
@@ -1627,7 +1773,7 @@
             const savings = avgSpend - orderTotal;
             if (savings > 0) {
                 monthlySavings += savings;
-                localStorage.setItem('scootersMonthlySavings', monthlySavings);
+                saveToFirebase('monthlySavings', monthlySavings);
             }
 
             orderHistory.push({
@@ -1638,7 +1784,7 @@
                 savings: savings
             });
 
-            localStorage.setItem('scootersOrders', JSON.stringify(orderHistory));
+            saveToFirebase('orderHistory', orderHistory);
             updateSmartOrderDisplay();
             alert(`Order saved! Total: $${orderTotal.toFixed(2)}${savings > 0 ? `\nSavings: $${savings.toFixed(2)}` : ''}`);
         }
@@ -1710,7 +1856,7 @@
                 weekDate, netSales, theoreticalCOGS, actualCOGS, theoreticalDollar, actualDollar, gap, categoryIssue, timestamp: Date.now()
             });
 
-            localStorage.setItem('scootersCOGS', JSON.stringify(cogsData));
+            saveToFirebase('cogsData', cogsData);
             updateCOGSDisplay();
 
             // Clear form
