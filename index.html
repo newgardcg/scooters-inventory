@@ -523,6 +523,26 @@
                     <button onclick="addCOGSEntry()">Add COGS Entry</button>
                 </div>
 
+                <!-- Daily Sales Import Feature -->
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: white; margin-bottom: 15px;">📊 Import Daily Sales from PAR POS</h3>
+                    <p style="font-size: 14px; margin-bottom: 15px; opacity: 0.95;">Paste your daily sales report to calculate theoretical inventory usage and compare with actual counts.</p>
+
+                    <div class="form-group">
+                        <label style="color: white; font-weight: 600;">Sales Data (one item per line):</label>
+                        <p style="font-size: 12px; margin: 5px 0 10px; opacity: 0.9;">Format: Item Name, Quantity sold (or copy from PAR POS report)</p>
+                        <textarea id="salesDataInput" rows="8" placeholder="MED Flavored Latte, 45&#10;LRG Caramelicious, 32&#10;Bacon Burrito, 18&#10;Maple Waffle Sandwich, 25&#10;Red Bull Regular, 12&#10;&#10;Or paste CSV/Excel data from PAR POS" style="width: 100%; padding: 12px; border: none; border-radius: 6px; font-family: monospace; font-size: 13px;"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button onclick="processSalesData()" style="background: #28a745; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">📊 Calculate Theoretical Usage</button>
+                        <button onclick="clearSalesData()" style="background: #6c757d; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Clear</button>
+                    </div>
+                </div>
+
+                <!-- Theoretical vs Actual Results -->
+                <div id="theoreticalResults" style="display: none; margin: 20px 0;"></div>
+
                 <div id="cogsGapDisplay"></div>
 
                 <div class="checklist">
@@ -2290,6 +2310,287 @@
 
             html += '</tbody></table>';
             historyDiv.innerHTML = html;
+        }
+
+        // ============================================================================
+        // SALES DATA IMPORT & THEORETICAL USAGE CALCULATION
+        // ============================================================================
+
+        // Recipe definitions (amounts per drink/item sold)
+        const recipes = {
+            // LATTES - MED
+            "MED Flavored Latte": { milk: 8/128, syrup: 2*1/64, espresso: 2/16 },
+            "MED Iced Flavored Latte": { milk: 8/128, syrup: 2*1/64, espresso: 2/16 },
+            "MED Banana Bread Latte": { milk: 8/128, syrup: 2*1/64, espresso: 2/16 },
+            "MED Latte": { milk: 8/128, espresso: 2/16 },
+            "MED Iced Latte": { milk: 8/128, espresso: 2/16 },
+            "MED Caramelicious": { milk: 8/128, caramelSauce: 2*1/64, espresso: 2/16 },
+            "MED Iced Caramelicious": { milk: 8/128, caramelSauce: 2*1/64, espresso: 2/16 },
+            "MED Cinnalicious": { milk: 8/128, cinnamonDrizzle: 0.5/12, espresso: 2/16 },
+            "MED Iced Cinnalicious": { milk: 8/128, cinnamonDrizzle: 0.5/12, espresso: 2/16 },
+            "MED White Mocha": { milk: 8/128, whiteMocha: 2*1/64, espresso: 2/16 },
+            "MED Mocha": { milk: 8/128, mocha: 2*1/64, espresso: 2/16 },
+
+            // LATTES - LRG
+            "LRG Flavored Latte": { milk: 12/128, syrup: 3*1/64, espresso: 3/16 },
+            "LRG Iced Flavored Latte": { milk: 12/128, syrup: 3*1/64, espresso: 3/16 },
+            "LRG Caramelicious": { milk: 12/128, caramelSauce: 3*1/64, espresso: 3/16 },
+            "LRG White Mocha": { milk: 12/128, whiteMocha: 3*1/64, espresso: 3/16 },
+
+            // BLENDERS
+            "MED Blended Caramelicious": { milk: 8/128, caramelSauce: 2*1/64, espresso: 2/16, iceCreamBase: 4/128 },
+            "MED Oreo Blender": { milk: 8/128, oreoCrumbs: 1/12, iceCreamBase: 4/128 },
+            "SML Oreo Blender": { milk: 6/128, oreoCrumbs: 0.75/12, iceCreamBase: 3/128 },
+
+            // FOOD ITEMS
+            "Bacon Burrito": { burritoBacon: 1 },
+            "Sausage Burrito": { burritoSausage: 1 },
+            "Maple Waffle Sandwich": { mapleWaffle: 1 },
+            "Everything Bagel Sandwich": { everythingBagel: 1 },
+            "Bacon Breakfast Sandwich": { baconSandwich: 1 },
+            "French Toastie": { frenchToastie: 1 },
+            "Bacon Gouda Egg Bites": { baconGoudaBites: 1 },
+            "Tomato Feta Egg Bites": { tomatoFetaBites: 1 },
+            "Cinnamon Roll": { cinnamonRoll: 1 },
+            "Mini Chocolate Chip Cookies": { miniCookies: 1 },
+
+            // BEVERAGES
+            "Red Bull Regular": { redBullRegular: 1 },
+            "Red Bull Tropical": { redBullTropical: 1 },
+            "Red Bull Sugar Free": { redBullSugarFree: 1 },
+
+            // SMOOTHIES
+            "Strawberry Smoothie": { strawberrySmoothie: 1 },
+            "Mango Smoothie": { mangoSmoothie: 1 },
+            "Strawberry Banana Smoothie": { strawberryBananaSmoothie: 1 }
+        };
+
+        // Map recipe ingredients to inventory items
+        const ingredientToInventory = {
+            // Dairy
+            milk: { category: "Dairy & Cream", itemCode: "KRO-2PCT", unit: "gallon" },
+
+            // Syrups & Sauces (1 pump = 1oz, 64oz bottle = 64 pumps)
+            syrup: { category: "Syrups & Sauces", itemCode: "100251", unit: "bottle" }, // Vanilla default
+            caramelSauce: { category: "Syrups & Sauces", itemCode: "100254", unit: "bottle" },
+            whiteMocha: { category: "Syrups & Sauces", itemCode: "100255", unit: "bottle" },
+            mocha: { category: "Syrups & Sauces", itemCode: "100252", unit: "bottle" },
+
+            // Coffee
+            espresso: { category: "Coffee", itemCode: "100578", unit: "lb" },
+
+            // Toppings
+            cinnamonDrizzle: { category: "Toppings", itemCode: "102152", unit: "bottle" },
+            oreoCrumbs: { category: "Toppings", itemCode: "102252", unit: "lb" },
+            iceCreamBase: { category: "Dairy & Cream", itemCode: "100729", unit: "gallon" },
+
+            // Food
+            burritoBacon: { category: "Food", itemCode: "100763", unit: "each" },
+            burritoSausage: { category: "Food", itemCode: "100764", unit: "each" },
+            mapleWaffle: { category: "Food", itemCode: "100145", unit: "each" },
+            everythingBagel: { category: "Food", itemCode: "100144", unit: "each" },
+            frenchToastie: { category: "Food", itemCode: "102224", unit: "each" },
+            baconGoudaBites: { category: "Food", itemCode: "100766", unit: "each" },
+            tomatoFetaBites: { category: "Food", itemCode: "100765", unit: "each" },
+            cinnamonRoll: { category: "Food", itemCode: "100532", unit: "each" },
+            miniCookies: { category: "Food", itemCode: "102118", unit: "each" },
+
+            // Beverages
+            redBullRegular: { category: "Beverages", itemCode: "100792", unit: "each" },
+            redBullTropical: { category: "Beverages", itemCode: "100793", unit: "each" },
+            redBullSugarFree: { category: "Beverages", itemCode: "100794", unit: "each" },
+            strawberrySmoothie: { category: "Beverages", itemCode: "100159", unit: "each" },
+            mangoSmoothie: { category: "Beverages", itemCode: "100160", unit: "each" },
+            strawberryBananaSmoothie: { category: "Beverages", itemCode: "100182", unit: "each" }
+        };
+
+        function parseSalesData(text) {
+            const lines = text.trim().split('\n');
+            const sales = [];
+
+            for (const line of lines) {
+                if (!line.trim()) continue;
+
+                // Try different formats: "Item, Quantity" or "Item\tQuantity" or just "Item: Quantity"
+                const parts = line.split(/[,\t:]/).map(p => p.trim());
+
+                if (parts.length >= 2) {
+                    const itemName = parts[0];
+                    const quantity = parseInt(parts[1]) || 0;
+
+                    if (quantity > 0) {
+                        sales.push({ itemName, quantity });
+                    }
+                }
+            }
+
+            return sales;
+        }
+
+        function calculateTheoreticalUsage(salesData) {
+            const usage = {}; // itemCode -> quantity used
+            const unmatchedItems = [];
+
+            for (const sale of salesData) {
+                const recipe = recipes[sale.itemName];
+
+                if (!recipe) {
+                    unmatchedItems.push(sale.itemName);
+                    continue;
+                }
+
+                // Calculate ingredient usage for this item
+                for (const [ingredient, amount] of Object.entries(recipe)) {
+                    const inventoryItem = ingredientToInventory[ingredient];
+
+                    if (inventoryItem) {
+                        const itemCode = inventoryItem.itemCode;
+                        const totalUsed = amount * sale.quantity;
+
+                        if (!usage[itemCode]) {
+                            usage[itemCode] = {
+                                category: inventoryItem.category,
+                                itemCode: itemCode,
+                                quantity: 0,
+                                unit: inventoryItem.unit
+                            };
+                        }
+
+                        usage[itemCode].quantity += totalUsed;
+                    }
+                }
+            }
+
+            return { usage, unmatchedItems };
+        }
+
+        function processSalesData() {
+            const input = document.getElementById('salesDataInput').value;
+
+            if (!input.trim()) {
+                alert('Please paste sales data first!');
+                return;
+            }
+
+            // Parse sales data
+            const salesData = parseSalesData(input);
+
+            if (salesData.length === 0) {
+                alert('Could not parse sales data. Please check format:\nItem Name, Quantity');
+                return;
+            }
+
+            // Calculate theoretical usage
+            const { usage, unmatchedItems } = calculateTheoreticalUsage(salesData);
+
+            // Get last inventory count (Monday or Thursday)
+            const lastCount = countHistory.length > 0 ?
+                countHistory[countHistory.length - 1] : null;
+
+            // Display results
+            displayTheoreticalResults(salesData, usage, unmatchedItems, lastCount);
+        }
+
+        function displayTheoreticalResults(salesData, usage, unmatchedItems, lastCount) {
+            const resultsDiv = document.getElementById('theoreticalResults');
+            let html = '<div style="background: white; padding: 25px; border-radius: 8px; border: 2px solid #667eea;">';
+
+            // Header
+            html += '<h3 style="color: #667eea; margin-bottom: 20px;">📊 Theoretical Usage Analysis</h3>';
+
+            // Sales Summary
+            html += '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">';
+            html += '<h4 style="margin-bottom: 10px;">Items Sold Today:</h4>';
+            html += '<table style="width: 100%; font-size: 13px;"><thead><tr><th>Item</th><th>Qty Sold</th></tr></thead><tbody>';
+            salesData.forEach(item => {
+                html += `<tr><td>${item.itemName}</td><td><strong>${item.quantity}</strong></td></tr>`;
+            });
+            html += '</tbody></table></div>';
+
+            // Theoretical Usage
+            html += '<div style="background: #e7f3ff; padding: 15px; border-radius: 6px; margin-bottom: 20px;">';
+            html += '<h4 style="margin-bottom: 10px;">Theoretical Inventory Used:</h4>';
+            html += '<table style="width: 100%;"><thead><tr><th>Item</th><th>Theoretical Used</th><th>Unit</th><th>Actual Count</th><th>Gap</th><th>$ Value</th></tr></thead><tbody>';
+
+            let totalGapValue = 0;
+
+            for (const [itemCode, usageData] of Object.entries(usage)) {
+                // Find actual item in inventory
+                let actualItem = null;
+                let actualQuantity = 0;
+
+                if (lastCount && lastCount.inventory) {
+                    const category = lastCount.inventory[usageData.category];
+                    if (category) {
+                        actualItem = category.find(item => item.itemCode === itemCode);
+                        if (actualItem) {
+                            actualQuantity = actualItem.quantity;
+                        }
+                    }
+                }
+
+                // Find current inventory item for cost
+                let currentItem = null;
+                if (inventory[usageData.category]) {
+                    currentItem = inventory[usageData.category].find(item => item.itemCode === itemCode);
+                }
+
+                const gap = usageData.quantity;
+                const gapValue = currentItem ? gap * currentItem.cost : 0;
+                totalGapValue += gapValue;
+
+                const rowClass = gap > 5 ? 'yellow' : '';
+                html += `<tr class="${rowClass}">
+                    <td>${currentItem ? currentItem.name : itemCode}</td>
+                    <td><strong>${usageData.quantity.toFixed(2)}</strong></td>
+                    <td>${usageData.unit}</td>
+                    <td>${actualQuantity > 0 ? actualQuantity.toFixed(2) : 'N/A'}</td>
+                    <td>${gap.toFixed(2)}</td>
+                    <td>$${gapValue.toFixed(2)}</td>
+                </tr>`;
+            }
+
+            html += '</tbody></table></div>';
+
+            // Total Gap
+            html += `<div class="alert-box ${totalGapValue > 100 ? 'alert-danger' : totalGapValue > 50 ? 'alert-warning' : 'alert-success'}">`;
+            html += `<h4>Total Theoretical Usage Value: $${totalGapValue.toFixed(2)}</h4>`;
+            html += `<p style="margin-top: 10px; font-size: 14px;">This represents the inventory that should have been consumed based on sales.</p>`;
+            html += `</div>`;
+
+            // Unmatched items
+            if (unmatchedItems.length > 0) {
+                html += '<div class="alert-box alert-warning" style="margin-top: 20px;">';
+                html += '<h4>⚠️ Items Without Recipes:</h4>';
+                html += '<p style="font-size: 13px; margin-top: 10px;">Add recipes for these items to get complete theoretical usage:</p>';
+                html += '<ul style="margin-top: 10px; font-size: 13px;">';
+                unmatchedItems.forEach(item => {
+                    html += `<li>${item}</li>`;
+                });
+                html += '</ul></div>';
+            }
+
+            // Last count info
+            if (lastCount) {
+                html += `<p style="margin-top: 15px; font-size: 12px; color: #666;">`;
+                html += `Compared with ${lastCount.countType} count from ${new Date(lastCount.timestamp).toLocaleDateString()}`;
+                html += `</p>`;
+            } else {
+                html += '<div class="alert-box alert-warning" style="margin-top: 20px;">';
+                html += '<p>No inventory count available for comparison. Complete a Monday or Thursday count first.</p>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.style.display = 'block';
+            resultsDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function clearSalesData() {
+            document.getElementById('salesDataInput').value = '';
+            document.getElementById('theoreticalResults').style.display = 'none';
         }
 
         function emailCOGSSummary() {
